@@ -65,9 +65,9 @@ globalThis.fetch = async (url, init = {}) => {
     const html = text.replace(/'''([^']+)'''/g, '<b>$1</b>').split(/\n\n+/).map((para) => `<p>${para}</p>`).join('\n');
     return json({ parse: { title: 'Wikster', text: html } });
   }
-  if (p.get('prop') === 'images' && shape.images) {
-    const ids = p.get('pageids').split('|').map(Number);
-    return json({ query: { pages: Object.fromEntries(ids.map((id) => [id, { pageid: id, title: `Old ${id - 200}`, images: [{ title: 'File:Site-logo.png' }, { title: `File:Old ${id - 200} photo.jpg` }] }])) } });
+  if ((p.get('prop') === 'images' || p.get('prop') === 'images|pageprops') && shape.images) {
+    const titles = p.get('titles') ? p.get('titles').split('|') : p.get('pageids').split('|').map((id) => `Old ${Number(id) - 200}`);
+    return json({ query: { pages: Object.fromEntries(titles.map((title, i) => [i + 1, { pageid: i + 1, title, images: [{ title: 'File:Site-logo.png' }, { title: `File:${title} photo.jpg` }] }])) } });
   }
   if (p.get('prop') === 'imageinfo' && shape.images) {
     const titles = p.get('titles').split('|');

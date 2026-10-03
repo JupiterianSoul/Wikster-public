@@ -4,7 +4,7 @@ export { useLanguageSource } from '../i18n.js';
 export { setLive, useLiveSource } from '../live.js';
 export { fetchArticleText, useCustomPool, warmCustomPool } from '../wiki/custom.js';
 export { findWikis, inspectWiki, useAdultWikis, useFinderCache } from '../wiki/finder.js';
-export { usePictureCache } from '../wiki/art.js';
+export { findPictures, usePictureCache } from '../wiki/art.js';
 export { matureOptedIn } from '../age.js';
 export { fetchAlbumTotal } from '../albums.js';
 export { androidRequest } from '../platform.js';

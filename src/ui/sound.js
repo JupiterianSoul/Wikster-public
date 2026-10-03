@@ -722,6 +722,69 @@ class Synth {
     this.#transient(0.025);
   }
 
+  cue(name, { level = 0.5, dur = 0.6, at = 0 } = {}) {
+    if (!this.#ready()) return;
+    const k = clamp(level, 0, 1);
+    switch (name) {
+      case 'swell':
+        this.#noise({ at, dur, gain: 0.03 + k * 0.05, type: 'bandpass', from: 260, to: 1800 + k * 2400, q: 1.4 });
+        this.#note({ freq: this.#degree(0, -1), at, dur: dur * 1.1, gain: 0.04 + k * 0.04, bend: 0.06 });
+        break;
+      case 'pulse':
+        this.#noise({ at, dur: 0.16, gain: 0.07 + k * 0.08, type: 'lowpass', from: 220 + k * 160, to: 60, q: 0.9 });
+        this.#note({ freq: this.#degree(k > 0.6 ? 2 : 0, -1), at, dur: 0.3, gain: 0.035 + k * 0.04 });
+        break;
+      case 'tick':
+        this.#noise({ at, dur: 0.028, gain: 0.05 + k * 0.05, type: 'bandpass', from: 2600 + k * 1400, to: 1500, q: 3 });
+        break;
+      case 'zip':
+        for (let i = 0; i < 7; i++) this.#noise({ at: at + i * dur / 7, dur: 0.03, gain: 0.05 + k * 0.03, type: 'bandpass', from: 3000 + i * 260, to: 1800, q: 4 });
+        break;
+      case 'whoosh':
+        if (this.#kit('swipe', { gain: 0.45 + k * 0.3, rate: 0.9 + k * 0.2, vary: 0.05, at })) break;
+        this.#noise({ at, dur: 0.24 + k * 0.1, gain: 0.06 + k * 0.05, type: 'bandpass', from: 700, to: 3200, q: 0.9 });
+        break;
+      case 'crack':
+        this.#noise({ at, dur: 0.07, gain: 0.16 + k * 0.08, type: 'highpass', from: 2400, to: 6000, q: 0.8 });
+        this.#noise({ at: at + 0.02, dur: 0.22, gain: 0.08 + k * 0.06, type: 'bandpass', from: 1800, to: 500, q: 1.6 });
+        break;
+      case 'burst':
+        this.#noise({ at, dur: 0.5 + k * 0.3, gain: 0.14 + k * 0.08, type: 'lowpass', from: 1400, to: 90, q: 0.7 });
+        this.#noise({ at: at + 0.01, dur: 0.32, gain: 0.07 + k * 0.05, type: 'highpass', from: 3800, to: 9000, q: 0.6 });
+        this.#note({ freq: this.#degree(0, -1), at, dur: 0.7 + k * 0.5, gain: 0.08 + k * 0.05 });
+        this.#note({ freq: this.#degree(4, 1), at: at + 0.04, dur: 0.6, gain: 0.05 + k * 0.03 });
+        break;
+      case 'shimmer':
+        for (let i = 0; i < 3; i++) this.#noise({ at: at + i * 0.07, dur: 0.24, gain: 0.025 + k * 0.025, type: 'bandpass', from: 6000 + i * 900, to: 9000, q: 6 });
+        this.#note({ freq: this.#degree(7 + Math.round(k * 2), 1), at, dur: 0.5, gain: 0.03 + k * 0.03 });
+        break;
+      case 'chime':
+        [0, 2, 4, 7].forEach((deg, i) => this.#note({ freq: this.#degree(deg + Math.round(k * 2), 1), at: at + i * 0.06, dur: 0.5, gain: 0.05 + k * 0.03 }));
+        break;
+      case 'hum':
+        this.#note({ freq: this.#degree(0, -1), at, dur, gain: 0.05 + k * 0.03, bend: 0.03 });
+        this.#noise({ at, dur, gain: 0.025 + k * 0.02, type: 'bandpass', from: 300, to: 520, q: 3 });
+        break;
+      case 'rumble':
+        this.#noise({ at, dur: dur || 0.9, gain: 0.08 + k * 0.1, type: 'lowpass', from: 180, to: 50, q: 0.8 });
+        break;
+      case 'pop':
+        this.#transient(0.1 + k * 0.05);
+        this.#noise({ at, dur: 0.12, gain: 0.18, type: 'bandpass', from: 900, to: 180, q: 1.2 });
+        this.#note({ freq: this.#degree(4, 1), at: at + 0.02, dur: 0.3, gain: 0.06, bend: 0.2 });
+        break;
+      case 'stretch':
+        this.#note({ freq: this.#degree(Math.round(k * 4), 0), at, dur: 0.22, gain: 0.04 + k * 0.02, bend: 0.08 + k * 0.1 });
+        break;
+      case 'seal':
+        this.#noise({ at, dur: 0.1, gain: 0.12, type: 'lowpass', from: 700, to: 140, q: 1 });
+        this.#transient(0.08);
+        break;
+      default:
+        break;
+    }
+  }
+
   playReveal(rank = 0) {
     if (!this.#ready()) return;
     if (this.#kit('drop', { rate: 1 + rank * 0.05, gain: 0.6 + rank * 0.07 })) return;

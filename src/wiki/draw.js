@@ -3,7 +3,7 @@ import { RARITIES, rarityRank } from '../data/rarities.js';
 import { rollRarity } from '../data/odds.js';
 import { popularityFromViews } from '../pricing.js';
 import { ACTION, DRAW_BUDGET_MS, FILL_ROUNDS, MAX_SEARCH_OFFSET, deadQueries, offline, querySizeCache } from './core.js';
-import { POOL_LIMIT, bestImage, fetchViewsFor, freshlyVandalised, pageToCard, randomPool, searchPool, subjectScore } from './fetch.js';
+import { POOL_LIMIT, bestImage, fetchViewsFor, freshlyVandalised, isDisambiguation, pageToCard, randomPool, searchPool, subjectScore } from './fetch.js';
 import { isUsableText } from './filter.js';
 import { findPictures, textPicture } from './art.js';
 
@@ -37,7 +37,7 @@ export async function gatherCandidates(pack) {
   for (const page of pages) {
     if (seen.has(page.title)) continue;
     seen.add(page.title);
-    if (!isUsableText(page.title, page.extract)) continue;
+    if (!isUsableText(page.title, page.extract) || isDisambiguation(page)) continue;
     const score = subjectScore(pack, page);
     if (score > 0) scored.push({ page, score });
   }
@@ -48,7 +48,7 @@ export async function gatherCandidates(pack) {
 export const BARE_PATIENCE_MS = 7000;
 
 export async function picturedCards(pack, pages, seen, wanted, deadline) {
-  const bare = pages.filter((page) => !seen.has(page.title) && !bestImage(page) && isUsableText(page.title, page.extract) && !freshlyVandalised(page))
+  const bare = pages.filter((page) => !seen.has(page.title) && !bestImage(page) && isUsableText(page.title, page.extract) && !isDisambiguation(page) && !freshlyVandalised(page))
     .slice(0, wanted + 2);
   if (!bare.length) return [];
   for (const page of bare) seen.add(page.title);
@@ -117,7 +117,7 @@ export function cappedWishes(pack, wishes) {
 }
 
 export function pagesToCards(pages, seen) {
-  const fresh = pages.filter((page) => !seen.has(page.title) && bestImage(page) && isUsableText(page.title, page.extract));
+  const fresh = pages.filter((page) => !seen.has(page.title) && bestImage(page) && isUsableText(page.title, page.extract) && !isDisambiguation(page));
   for (const page of fresh) seen.add(page.title);
   return fresh.map((page) => pageToCard(page, null)).filter(Boolean);
 }
@@ -177,6 +177,7 @@ export async function drawWikipediaSet(pack, { budget = DRAW_BUDGET_MS } = {}) {
 }
 
 export const MANY_LANES = 12;
+export const PICTURE_RESERVE_MS = 7000;
 export const MANY_BARE_MAX = 12;
 
 const GUESS_ROAM = 200;
@@ -218,7 +219,7 @@ export async function gatherWikipedia(pack, total, { budget = DRAW_BUDGET_MS, la
     for (const page of pages) {
       if (seen.has(page.title)) continue;
       seen.add(page.title);
-      if (!isUsableText(page.title, page.extract)) continue;
+      if (!isUsableText(page.title, page.extract) || isDisambiguation(page)) continue;
       const score = anything ? 1 : subjectScore(pack, page);
       if (score <= 0) continue;
       if (!bestImage(page)) { if (!anything && !freshlyVandalised(page)) bare.push(page); continue; }
@@ -239,8 +240,9 @@ export async function gatherWikipedia(pack, total, { budget = DRAW_BUDGET_MS, la
     }
     return { run: () => randomPool(), anything: true };
   };
+  const lanesUntil = deadline - Math.min(PICTURE_RESERVE_MS, budget / 3);
   const lane = async () => {
-    while (have() < total && jobs < budgetJobs && !outOfTime()) {
+    while (have() < total && jobs < budgetJobs && !outOfTime() && Date.now() < lanesUntil) {
       jobs++;
       const job = nextJob();
       take(await job.run().catch(() => []), job.anything);

@@ -94,7 +94,7 @@ function dressLook(booster, look, spec, emblem, tier) {
   layer.style.cssText = `--zig:${SHAPES.zig};--burst:${SHAPES.burst};--wax:${SHAPES.wax}`;
   if (tier) layer.dataset.tier = '1';
   layer.innerHTML = `<div class="lk-sh"><i class="l1"></i><i class="l2"></i><i class="l3"></i>
-    <div class="lk-em">${emblem}</div><b class="lk-name"></b><span class="lk-cnt"></span><span class="lk-tier"></span></div>`;
+    <div class="lk-em">${emblem}</div><b class="lk-name"></b><span class="lk-cnt"></span><span class="lk-tier"></span><i class="lk-gl"></i><i class="lk-ed"></i></div>`;
   const name = specBaseName(spec);
   const nameEl = layer.querySelector('.lk-name');
   nameEl.textContent = name;

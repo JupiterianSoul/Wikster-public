@@ -1235,6 +1235,7 @@ html[data-lowpower='1'] .pch-daily.is-ready .pch-daily-mark::after { animation: 
 .pcs-tiles.is-sized { display: grid; width: 100%; grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(21rem * var(--shop-k, 1))), 1fr)); gap: 1.1rem; }
 .pcs-page.is-grid .pcs-tiles.is-sized > .shop-tile { width: auto; --tile-w: auto; }
 .pcs-page.is-custom { overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.pcs-page.is-scroll { overflow-y: auto; overscroll-behavior: contain; align-content: start; }
 
 .pcf {
   display: grid;

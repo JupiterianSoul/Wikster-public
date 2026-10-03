@@ -37,6 +37,7 @@ import { dealQuests } from '../data/quests.js';
 import { SOCIAL_ACTIONS } from './social.js';
 import { SERVER_ONLY } from './local.js';
 import { CARD_FIX, fixSpecialCards } from './fix.js';
+import { fixCardPictures } from './picfix.js';
 import { buyLive, eventGift, redeemFromBook, withOverrides } from './liveops.js';
 import { reservePlan, batchable, batchCap, batchNonce, batchPity, batchSizes, bestPrint, fuseRarity, fuseTierOf, mergedNonce, noteOpen, pityAfter, printCount, printPrice, printsOf, shapeHit, sortedPrints, spareRarity, takePrints, withPity } from './rules.js';
 
@@ -665,6 +666,9 @@ export const ACTIONS = {
     let fixed = null;
     try { fixed = await fixSpecialCards(ctx, loaded); } catch { fixed = null; }
     if (fixed) loaded = await ctx.store.load();
+    let pictured = null;
+    try { pictured = await fixCardPictures(ctx, loaded); } catch { pictured = null; }
+    if (pictured) loaded = await ctx.store.load();
     const moved = fixed && Object.keys(fixed.renamed).length ? { renamed: fixed.renamed } : {};
     const base = {
       wallet: loaded.wallet,

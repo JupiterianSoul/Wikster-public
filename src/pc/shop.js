@@ -125,6 +125,7 @@ function fitPage(main) {
   const over = () => pageNode.scrollHeight > main.clientHeight + 1 || pageNode.scrollWidth > main.clientWidth + 1;
   const drops = [...pageNode.querySelectorAll('[data-drop]')];
   for (const node of drops) node.classList.remove('pc-dropped');
+  pageNode.classList.remove('is-scroll');
   const shrink = () => {
     for (const k of TILE_STEPS) {
       main.style.setProperty('--shop-k', String(k));
@@ -137,6 +138,9 @@ function fitPage(main) {
     for (const node of drops) if (node.dataset.drop === rank) node.classList.add('pc-dropped');
     if (shrink()) return;
   }
+  for (const node of drops) node.classList.remove('pc-dropped');
+  main.style.setProperty('--shop-k', '1');
+  pageNode.classList.toggle('is-scroll', over());
 }
 
 let signature = '';

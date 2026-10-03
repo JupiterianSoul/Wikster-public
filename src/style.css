@@ -7,6 +7,7 @@
 @import './styles/booster.css' layer(booster);
 @import './styles/looks.css' layer(booster);
 @import './styles/cards.css' layer(cards);
+@import './styles/skins.css' layer(cards);
 @import './styles/screens.css' layer(screens);
 @import './styles/custom.css' layer(screens);
 @import './styles/games.css' layer(games);

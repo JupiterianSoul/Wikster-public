@@ -5,8 +5,8 @@ useLanguageSource(() => 'en');
 const { RARITIES } = await import('../../src/data/rarities.js');
 const { oddsFor } = await import('../../src/data/odds.js');
 const { drawArticlesMany } = await import('../../src/wiki/core.js');
-const { useArticlePool, poolPlan, compactCard, POOL_MAX } = await import('../../src/wiki/pool.js');
-const { usePictureCache } = await import('../../src/wiki/art.js');
+const { useArticlePool, poolPlan, compactCard, POOL_MAX, repicture } = await import('../../src/wiki/pool.js');
+const { usePictureCache, textCardArt, isTextArt } = await import('../../src/wiki/art.js');
 usePictureCache({ async get() { return []; }, async put() {} });
 
 function seeded(seed) {
@@ -136,5 +136,26 @@ check('a pool too small for the batch never repeats an article, it hands what it
 
 const big = compactCard(article(1, { extract: 'x '.repeat(2000), wordCount: 9000 }));
 check('pool rows stay compact', big.extract.length <= 601 && !('wordCount' in big));
+
+const plated = compactCard(article(4000, { thumbnail: textCardArt({ title: 'Pooled 4000' }), picture: { source: 'text' } }), { plates: true });
+check('a text card sits in a pool as a few bytes, not as its drawing', plated.thumbnail === null && plated.picture.source === 'text' && JSON.stringify(plated).length < 1200);
+const plateId = (await poolPlan({ ...pack, queries: ['platetest'] })).id;
+await store.fill(plateId, 'wiki', [...Array.from({ length: 12 }, (_, i) => compactCard(article(4100 + i))), ...Array.from({ length: 4 }, (_, i) => compactCard(article(4200 + i, { thumbnail: textCardArt({ title: 'x' }) }), { plates: true }))], POOL_MAX);
+const platedSets = await drawArticlesMany({ ...pack, queries: ['platetest'] }, 2, { random: seeded(6), poolOnly: true });
+check('a pool deals its pictured articles before any text card', platedSets.flat().length === 10 && platedSets.flat().every((c) => !isTextArt(c.thumbnail)));
+const thinSets = await drawArticlesMany({ ...pack, queries: ['platetest'] }, 3, { random: seeded(8), poolOnly: true });
+check('and draws the text card again from the title when it has to', thinSets.flat().some((c) => isTextArt(c.thumbnail)) && thinSets.flat().every((c) => c.thumbnail));
+const mendPlan = { api: 'https://en.wikipedia.org/w/api.php', look: { subject: 'Test' } };
+const realFetch = globalThis.fetch;
+globalThis.fetch = async (url) => {
+  const u = new URL(String(url));
+  const json = (body) => ({ ok: true, status: 200, json: async () => body, headers: { get: () => null } });
+  if (u.searchParams.get('prop') === 'images|pageprops') return json({ query: { pages: { 1: { title: 'Pooled 4200', images: [{ title: 'File:Pooled 4200.jpg' }] } } } });
+  if (u.searchParams.get('prop') === 'imageinfo') return json({ query: { pages: { '-1': { title: 'File:Pooled 4200.jpg', imageinfo: [{ url: 'https://upload.wikimedia.org/p/4200.jpg', width: 800, height: 600, thumburl: 'https://upload.wikimedia.org/p/640px-4200.jpg', mime: 'image/jpeg' }] } } } });
+  return json({ query: { pages: {} }, results: [] });
+};
+const mended = await repicture(mendPlan, [...rows.get(plateId).values()].filter((c) => c.picture?.source === 'text'));
+globalThis.fetch = realFetch;
+check('a refill finds the pictures its text cards were missing', mended.length === 1 && mended[0].title === 'Pooled 4200' && mended[0].thumbnail === 'https://upload.wikimedia.org/p/640px-4200.jpg' && !mended[0].picture);
 
 done();

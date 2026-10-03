@@ -17,7 +17,7 @@ function miniCard(color, legendary) {
   return c;
 }
 
-export function openingPreview(id) {
+export function openingPreview(id, { hold = null } = {}) {
   const box = document.createElement('div');
   box.className = 'ofx-stage';
   box.setAttribute('role', 'button');
@@ -68,7 +68,7 @@ export function openingPreview(id) {
     const root = document.createElement('div');
     root.className = 'ofx-preview-root';
     box.appendChild(root);
-    await playOpening(id, { root, center: { x: w / 2, y: h / 2 }, pack, packW, packH: packW * 1.79, cards, targets });
+    await playOpening(id, { root, center: { x: w / 2, y: h / 2 }, pack, packW, packH: packW * 1.79, cards, targets, hold: hold ? hold() : null });
     for (const c of cards) {
       c.classList.add('is-up');
       await new Promise((res) => setTimeout(res, 170));
@@ -94,13 +94,34 @@ export function lookTile(look, { button }) {
   card.dataset.look = look ? look.id : 'classic';
   const stage = document.createElement('div');
   stage.className = 'look-stage';
-  stage.appendChild(samplePack(look ? look.id : null, 'is-small'));
+  const pack = samplePack(look ? look.id : null, 'is-small');
+  stage.appendChild(pack);
+  liveLook(stage, pack);
   const name = document.createElement('h4');
   name.textContent = look ? tx(look.name) : t('lookClassic');
   const note = document.createElement('p');
   note.textContent = look ? tx(look.note) : t('lookClassicNote');
   card.append(stage, name, note, button);
   return card;
+}
+
+const liveWatch = typeof IntersectionObserver === 'function'
+  ? new IntersectionObserver((entries) => {
+    for (const { target, isIntersecting } of entries) target.firstElementChild?.classList.toggle('is-live', isIntersecting);
+  }, { threshold: 0.2 })
+  : null;
+
+function liveLook(stage, pack) {
+  if (liveWatch) liveWatch.observe(stage);
+  else pack.classList.add('is-live');
+  stage.addEventListener('pointermove', (event) => {
+    if (event.pointerType === 'touch') return;
+    const r = stage.getBoundingClientRect();
+    const x = (event.clientX - r.left) / r.width - 0.5;
+    const y = (event.clientY - r.top) / r.height - 0.5;
+    pack.style.transform = `perspective(500px) rotateY(${(x * 18).toFixed(1)}deg) rotateX(${(-y * 14).toFixed(1)}deg)`;
+  });
+  stage.addEventListener('pointerleave', () => { pack.style.transform = ''; });
 }
 
 export function openingTile(opening, { button }) {

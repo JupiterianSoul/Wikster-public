@@ -1,11 +1,17 @@
 import { getLanguage } from '../i18n.js';
 import { popularityFromWordCount } from '../pricing.js';
-import { ACTION, DRAW_BUDGET_MS, encodeTitle, fetchJson, offline, pick, thumbSize } from './core.js';
+import { ACTION, DRAW_BUDGET_MS, encodeTitle, fetchJson, fetchJsonRetry, offline, pick, thumbSize } from './core.js';
+
+export const WIKI_TRIES = 3;
+export const WIKI_PATIENCE_MS = 14000;
+export const WIKI_TIMEOUT_MS = 12000;
+
+const wikiJson = (url, options = {}) => fetchJsonRetry(url, { tries: WIKI_TRIES, budget: WIKI_PATIENCE_MS, timeout: WIKI_TIMEOUT_MS, ...options });
 import { cappedWishes, rollWishes, settleWishes, stampPrints } from './draw.js';
 import { POOL_LIMIT, pagesOf } from './fetch.js';
 import { BAD_SUFFIX, BAD_TITLE, isUsableText, toCard } from './filter.js';
 import { MIN_ARTICLES, farmOf, findWikis, foldName, probeSite, slugsFor } from './finder.js';
-import { findPictures, textPicture } from './art.js';
+import { FILE_BATCH, findPictures, isTextArt, textPicture } from './art.js';
 import { maturePage } from './mature.js';
 
 export const candidateSlugs = slugsFor;
@@ -113,10 +119,10 @@ export async function customLeadHtml(wiki, pageId) {
     action: 'parse', pageid: String(pageId), prop: 'text', section: '0',
     format: 'json', origin: '*'
   });
-  return (await fetchJson(`${wiki.apiUrl}?${params}`))?.parse?.text?.['*'] ?? null;
+  return (await wikiJson(`${wiki.apiUrl}?${params}`))?.parse?.text?.['*'] ?? null;
 }
 
-export function leadImageIn(html) {
+export function leadImageIn(html, base = null) {
   if (!html) return null;
   for (const { src, width, height } of imagesIn(html)) {
     if (!src || src.startsWith('data:')) continue;
@@ -125,7 +131,12 @@ export function leadImageIn(html) {
     if (JUNK_IMAGE.test(name)) continue;
     if (width && width < 80) continue;
     if (height && height < 60) continue;
-    return upgradeImageUrl(src.startsWith('//') ? `https:${src}` : src, 640);
+    let url = src.startsWith('//') ? `https:${src}` : src;
+    if (!/^https?:/i.test(url)) {
+      if (!base) continue;
+      try { url = new URL(url, base).href; } catch { continue; }
+    }
+    return upgradeImageUrl(url, 640);
   }
   return null;
 }
@@ -145,7 +156,7 @@ export async function customPageImage(wiki, pageId, title = '') {
       prop: 'imageinfo', iiprop: 'url|size|mime', iiurlwidth: '640',
       format: 'json', origin: '*'
     });
-    const pages = Object.values((await fetchJson(`${wiki.apiUrl}?${params}`))?.query?.pages ?? {});
+    const pages = Object.values((await wikiJson(`${wiki.apiUrl}?${params}`))?.query?.pages ?? {});
     const words = titleWords(title);
     const usable = pages
       .map((p) => ({ title: p.title ?? '', info: p.imageinfo?.[0] }))
@@ -176,19 +187,22 @@ export async function customPageImage(wiki, pageId, title = '') {
   }
 }
 
-export function detailProps(limit = POOL_LIMIT) {
+export const SLOW_DETAIL_MS = 3500;
+export const slowExtracts = new Set();
+
+export function detailProps(limit = POOL_LIMIT, { extracts = true } = {}) {
   return {
-    prop: 'extracts|pageimages|info|categories|pageprops',
-    exintro: '1', explaintext: '1', exchars: '600', exlimit: String(limit),
+    prop: extracts ? 'extracts|pageimages|info|categories|pageprops' : 'pageimages|info|categories|pageprops',
+    ...(extracts ? { exintro: '1', explaintext: '1', exchars: '600', exlimit: String(limit) } : {}),
     piprop: 'thumbnail|original', pithumbsize: thumbSize(), pilimit: String(limit),
-    cllimit: 'max', ppprop: 'wikibase_item',
+    cllimit: 'max', ppprop: 'wikibase_item|disambiguation|description',
     inprop: 'url', format: 'json', origin: '*'
   };
 }
 
 export async function customPageDetail(wiki, pageId) {
   const params = new URLSearchParams({ action: 'query', pageids: String(pageId), ...detailProps(1) });
-  return (await fetchJson(`${wiki.apiUrl}?${params}`))?.query?.pages?.[pageId] ?? null;
+  return (await wikiJson(`${wiki.apiUrl}?${params}`))?.query?.pages?.[pageId] ?? null;
 }
 
 export async function customLeadText(wiki, pageId) {
@@ -224,13 +238,26 @@ export async function randomIds(wiki, limit = 20) {
     action: 'query', list: 'random', rnnamespace: '0', rnlimit: String(limit),
     format: 'json', origin: '*'
   });
-  return ((await fetchJson(`${wiki.apiUrl}?${params}`))?.query?.random ?? [])
+  return ((await wikiJson(`${wiki.apiUrl}?${params}`))?.query?.random ?? [])
     .filter((r) => r.id).map((r) => r.id);
 }
 
+export async function detailed(wiki, ask) {
+  const slow = slowExtracts.has(wiki.apiUrl);
+  const started = Date.now();
+  try {
+    const data = await wikiJson(`${wiki.apiUrl}?${new URLSearchParams({ ...ask, ...detailProps(POOL_LIMIT, { extracts: !slow }) })}`, slow ? {} : { tries: 1, timeout: SLOW_DETAIL_MS * 2 });
+    if (!slow && Date.now() - started > SLOW_DETAIL_MS) slowExtracts.add(wiki.apiUrl);
+    return data;
+  } catch (error) {
+    if (slow || error?.status) throw error;
+    slowExtracts.add(wiki.apiUrl);
+    return wikiJson(`${wiki.apiUrl}?${new URLSearchParams({ ...ask, ...detailProps(POOL_LIMIT, { extracts: false }) })}`);
+  }
+}
+
 export async function customPagesDetail(wiki, ids) {
-  const params = new URLSearchParams({ action: 'query', pageids: ids.slice(0, POOL_LIMIT).join('|'), ...detailProps() });
-  return pagesOf(await fetchJson(`${wiki.apiUrl}?${params}`));
+  return pagesOf(await detailed(wiki, { action: 'query', pageids: ids.slice(0, POOL_LIMIT).join('|') }));
 }
 
 const WIKIPEDIA_HOST = /^([a-z-]{2,12})\.wikipedia\.org$/;
@@ -246,8 +273,59 @@ export const poolKey = (wiki) => (wiki?.topic ? `${wiki.apiUrl}#${foldName(wiki.
 
 export const SUBPAGE = /\/(gallery|quotes?|trivia|history|transcripts?|script|synopsis|appearances?|gameplay|images?|navigation|relationships?|abilities|archive ?\d*|drafts?|sandbox|development|credits|changelog|sounds?|music|dialogues?|navbox|doc|strategy|guide|walkthrough|cosmetics|skins|versions|patch notes|data|overview|galerie|citations|histoire|anecdotes|apparitions)$/i;
 
-export function protoCard(page) {
-  if (!page?.pageid || BAD_TITLE.test(page.title) || BAD_SUFFIX.test(page.title) || SUBPAGE.test(page.title)) return null;
+const SUBPAGE_HEAD = /^[A-Z][\w' -]*s$/;
+const VERSION_TITLE = /(^v?\d+\.\d+)|\b(edition|patch|update|server|alpha|beta|classic|pre-?release|snapshot|version|changelog)\b.*\d+\.\d+/i;
+const FILE_TITLE = /\.(json|js|css|lua|txt|xml|png|jpe?g|gif|svg|ogg|mp3|wav|nbt|mcfunction)$/i;
+const JUNK_NAMESPACE = /^(template|module|user|user talk|talk|mediawiki|help|category|file|forum|message wall|thread|board|blog|special|data|map|widget|property|portal|draft|project):/i;
+
+export function isSubpage(title) {
+  const parts = String(title ?? '').split('/');
+  if (parts.length < 2 || parts.some((part) => !part.trim())) return false;
+  if (parts.length > 2) return true;
+  const [head, tail] = parts;
+  if (/\s$/.test(head) || /^\s/.test(tail) || head.trim().length < 3) return false;
+  return head.trim().length > 4 || !/\s/.test(tail.trim()) || SUBPAGE_HEAD.test(head.trim());
+}
+
+export function junkTitle(title, wiki = null) {
+  const text = String(title ?? '');
+  if (!text || BAD_TITLE.test(text) || BAD_SUFFIX.test(text) || SUBPAGE.test(text) || JUNK_NAMESPACE.test(text) || FILE_TITLE.test(text)) return true;
+  let wikipedia = false;
+  try { wikipedia = Boolean(wiki?.apiUrl && WIKIPEDIA_HOST.test(new URL(wiki.apiUrl).hostname)); } catch {}
+  if (wikipedia) return false;
+  return isSubpage(text) || VERSION_TITLE.test(text);
+}
+
+const META_CATEGORY = /^(community|polic(y|ies)|guidelines?|help( pages)?|administration|administrators|staff|sandbox(es)?|templates?|navigation( templates)?|navboxes|maintenance|candidates for deletion|guides?|tutorials?|walkthroughs?|strategy guides?|changelogs?|version history|update history|patch notes|updates|versions|disambiguations?|disambiguation pages|set index articles|lists?|lists of .+|.+ lists|galleries|redirects|archives?|users?|user pages|blog posts|forums?|wiki .+|.+ wiki (maintenance|administration|policy|policies|guidelines|staff))$/i;
+const META_TITLE = /^(guide|guides|tutorial|tutorials|walkthrough|list|lists|index|changelog|version history|patch notes|sandbox|community|policy|policies|rules|manual of style|main page|home|about|faq|news|recent changes|wiki)\b/i;
+const DISAMBIG_TEXT = /\b(may|can|might) (also )?refer to\b|\bis a disambiguation\b/i;
+const MOD_WIKI = /\b(mods?|modded|modpack|expansion|overhaul|addon|add-on)\b/i;
+const VANILLA_TEXT = /\b(is|are|was|were) an? (vanilla|base[- ]game)\b|\bfor the vanilla\b|\b(from|in) the (base|vanilla|original) game\b|\bvanilla (items?|enem(y|ies)|bosse?s?|npcs?|debuffs?|buffs?|weapons?|blocks?|biomes?|accessor(y|ies)|mechanics?|content|tiles?|structures?|events?)\b/i;
+const VANILLA_CATEGORY = /\b(vanilla|base game|from terraria|from minecraft)\b/i;
+export const CUSTOM_TEXT_MIN = 100;
+
+export const categoryNames = (page) => (page?.categories ?? []).map((c) => String(c?.title ?? '').replace(/^[^:]+:/, ''));
+
+export function modWiki(wiki) {
+  return MOD_WIKI.test(`${wiki?.sitename ?? ''} ${wiki?.topic ?? ''}`);
+}
+
+export function offTopic(page, text, wiki) {
+  const cats = categoryNames(page);
+  if (META_TITLE.test(String(page?.title ?? '')) || cats.some((c) => META_CATEGORY.test(c))) return 'META';
+  if (DISAMBIG_TEXT.test(String(text ?? '').slice(0, 300))) return 'META';
+  if (modWiki(wiki) && (VANILLA_TEXT.test(String(text ?? '')) || VANILLA_TEXT.test(String(page?.pageprops?.description ?? '')) || cats.some((c) => VANILLA_CATEGORY.test(c)))) return 'VANILLA';
+  return null;
+}
+
+export function stockable(card, wiki) {
+  if (!card?.title || junkTitle(card.title, wiki)) return false;
+  if (!card.thumbnail || isTextArt(card.thumbnail)) return false;
+  return String(card.extract ?? '').trim().length >= CUSTOM_TEXT_MIN && !offTopic({ title: card.title }, card.extract, wiki);
+}
+
+export function protoCard(page, wiki = null) {
+  if (!page?.pageid || page.pageprops?.disambiguation !== undefined || junkTitle(page.title, wiki)) return null;
   const wordCount = page.length ? Math.round(page.length / 6) : null;
   return { page, popularity: popularityFromWordCount(wordCount), wordCount, text: null, file: null };
 }
@@ -321,7 +399,7 @@ export async function leadTexts(wiki, pages) {
     action: 'query', pageids: list.map((p) => p.pageid).join('|'), prop: 'revisions', rvprop: 'content', rvslots: 'main',
     format: 'json', formatversion: '2', origin: '*'
   });
-  const data = await fetchJson(`${wiki.apiUrl}?${params}`);
+  const data = await wikiJson(`${wiki.apiUrl}?${params}`);
   const leads = [];
   for (const page of Object.values(data?.query?.pages ?? {})) {
     const rev = page?.revisions?.[0];
@@ -334,7 +412,7 @@ export async function leadTexts(wiki, pages) {
   }
   if (!leads.length) return found;
   const text = `${leads.map(({ id, lead }) => `${CUT(id)}\n\n${lead}`).join('\n\n')}\n\n${CUT(0)}\n\n<references />`;
-  const parsed = await fetchJson(`${wiki.apiUrl}?origin=*`, {
+  const parsed = await wikiJson(`${wiki.apiUrl}?origin=*`, {
     form: {
       action: 'parse', format: 'json', formatversion: '2', prop: 'text', contentmodel: 'wikitext',
       disablelimitreport: '1', disableeditsection: '1', disabletoc: '1', title: 'Wikster', text
@@ -347,43 +425,6 @@ export async function leadTexts(wiki, pages) {
     if (!id) continue;
     const body = htmlToText(String(parts[i + 1] ?? '').replace(/<(strong|span|div|p|sup)\b[^>]*class="[^"]*\b(error|reference)\b[^"]*"[^>]*>[\s\S]*?<\/\1>/gi, ''));
     if (body) found.set(id, body);
-  }
-  return found;
-}
-
-export async function pageFiles(wiki, pages) {
-  const found = new Map();
-  const list = pages.filter((p) => p?.pageid).slice(0, POOL_LIMIT);
-  if (!list.length) return found;
-  const data = await fetchJson(`${wiki.apiUrl}?${new URLSearchParams({
-    action: 'query', pageids: list.map((p) => p.pageid).join('|'), prop: 'images', imlimit: 'max', format: 'json', origin: '*'
-  })}`);
-  const picks = new Map();
-  for (const page of Object.values(data?.query?.pages ?? {})) {
-    const words = titleWords(page.title);
-    const files = (page.images ?? []).map((f) => f.title).filter((name) => name && !JUNK_IMAGE.test(name) && /\.(jpe?g|png|webp)$/i.test(name))
-      .map((name) => ({ name, hits: words.filter((w) => name.toLowerCase().includes(w)).length }))
-      .sort((a, b) => b.hits - a.hits)
-      .slice(0, 2);
-    if (files.length) picks.set(page.pageid, files.map((f) => f.name));
-  }
-  const names = [...new Set([...picks.values()].flat())].slice(0, 50);
-  if (!names.length) return found;
-  const info = await fetchJson(`${wiki.apiUrl}?${new URLSearchParams({
-    action: 'query', titles: names.join('|'), prop: 'imageinfo', iiprop: 'url|size|mime', iiurlwidth: '640', format: 'json', origin: '*'
-  })}`);
-  const normal = new Map((info?.query?.normalized ?? []).map((n) => [n.from, n.to]));
-  const byName = new Map(Object.values(info?.query?.pages ?? {}).map((p) => [p.title, p.imageinfo?.[0]]));
-  for (const [id, files] of picks) {
-    for (const name of files) {
-      const meta = byName.get(normal.get(name) ?? name);
-      if (!meta) continue;
-      const w = meta.width ?? 0;
-      const h = meta.height ?? 0;
-      if (w && h && (w < MIN_IMAGE_EDGE || h < MIN_IMAGE_EDGE * 0.6 || w / h > 4 || h / w > 4 || w * h < MIN_IMAGE_AREA)) continue;
-      const src = meta.thumburl ?? meta.url;
-      if (src) { found.set(id, upgradeImageUrl(src.startsWith('//') ? `https:${src}` : src, 640)); break; }
-    }
   }
   return found;
 }
@@ -408,7 +449,7 @@ export function customCard(wiki, proto, pack, extract, art) {
   return card;
 }
 
-const lookOf = (pack, wiki) => ({ subject: pack.name ?? wiki.sitename ?? '', icon: pack.look?.icon ?? 'wand', accent: pack.look?.accent, accent2: pack.look?.accent2 });
+export const lookOf = (pack, wiki) => ({ subject: pack.name ?? wiki.sitename ?? '', icon: pack.look?.icon ?? 'wand', accent: pack.look?.accent, accent2: pack.look?.accent2 });
 
 export async function finishCustomCard(wiki, proto, pack) {
   const { page } = proto;
@@ -419,9 +460,10 @@ export async function finishCustomCard(wiki, proto, pack) {
     const html = await leadHtml();
     extract = html ? htmlToText(html) : null;
   }
-  if (!isUsableText(page.title, extract)) throw new Error('NO_TEXT');
+  if (!isUsableText(page.title, extract) || String(extract).trim().length < CUSTOM_TEXT_MIN) throw new Error('NO_TEXT');
+  if (offTopic(page, extract, wiki)) throw new Error('OFF_TOPIC');
   if (!wiki.mature && maturePage(page, extract)) throw new Error('MATURE');
-  const own = pageImage(page) ?? proto.file ?? leadImageIn(await leadHtml()) ?? await customPageImage(wiki, page.pageid, page.title);
+  const own = pageImage(page) ?? leadImageIn(await leadHtml(), wiki.apiUrl);
   const look = lookOf(pack, wiki);
   const art = own ? { thumbnail: own }
     : (await findPictures([page], { apiUrl: wiki.apiUrl, hint: wiki.topic ?? pack.name, allowMature: Boolean(wiki.mature), look, deadline: Date.now() + 6000 }).catch(() => null))?.get(page.title)
@@ -441,7 +483,7 @@ export async function huntCustomCard(wiki, pack, seen, deadline, tally) {
     const choice = pick(fresh);
     seen.add(choice.title);
     const page = await customPageDetail(wiki, choice.id).catch(() => null);
-    const proto = protoCard(page);
+    const proto = protoCard(page, wiki);
     if (!proto) { tally.other++; continue; }
     try {
       return await finishCustomCard(wiki, proto, pack);
@@ -453,7 +495,7 @@ export async function huntCustomCard(wiki, pack, seen, deadline, tally) {
 }
 
 export function tallyMiss(tally, reason) {
-  const slot = reason === 'NO_TEXT' ? 'noText' : reason === 'NO_IMAGE' ? 'noImage' : reason === 'MATURE' ? 'mature' : 'other';
+  const slot = reason === 'NO_TEXT' ? 'noText' : reason === 'NO_IMAGE' ? 'noImage' : reason === 'MATURE' ? 'mature' : reason === 'OFF_TOPIC' ? 'offTopic' : 'other';
   tally[slot] = (tally[slot] ?? 0) + 1;
 }
 
@@ -464,11 +506,10 @@ export async function topicDetailed(wiki) {
   const known = topicHits.get(key) ?? 0;
   const roam = Math.min(known, 400) - POOL_LIMIT;
   const offset = roam > 0 ? Math.floor(Math.random() * roam) : 0;
-  const params = new URLSearchParams({
+  const data = await detailed(wiki, {
     action: 'query', generator: 'search', gsrsearch: `"${String(wiki.topic).replace(/"/g, '')}"`, gsrnamespace: '0',
-    gsrlimit: String(POOL_LIMIT), gsroffset: String(offset), gsrinfo: 'totalhits', ...detailProps()
+    gsrlimit: String(POOL_LIMIT), gsroffset: String(offset), gsrinfo: 'totalhits'
   });
-  const data = await fetchJson(`${wiki.apiUrl}?${params}`);
   const hits = Number(data?.query?.searchinfo?.totalhits);
   if (Number.isFinite(hits)) topicHits.set(key, hits);
   return pagesOf(data);
@@ -476,10 +517,7 @@ export async function topicDetailed(wiki) {
 
 export async function randomDetailed(wiki) {
   if (wiki.topic) return topicDetailed(wiki);
-  const params = new URLSearchParams({
-    action: 'query', generator: 'random', grnnamespace: '0', grnlimit: String(POOL_LIMIT), ...detailProps()
-  });
-  return pagesOf(await fetchJson(`${wiki.apiUrl}?${params}`));
+  return pagesOf(await detailed(wiki, { action: 'query', generator: 'random', grnnamespace: '0', grnlimit: String(POOL_LIMIT) }));
 }
 
 export async function pageBatch(wiki) {
@@ -503,13 +541,14 @@ const beforeDeadline = (promise, deadline) => Promise.race([
 
 export async function gatherCustom(wiki, pack, wanted, seen, deadline, tally, { width = CUSTOM_LANES, rounds = CUSTOM_ROUNDS } = {}) {
   const out = [];
+  const spare = [];
   const late = () => Date.now() > deadline || offline();
   const look = lookOf(pack, wiki);
   for (let round = 0; out.length < wanted && round < rounds && !late();) {
     const lanes = Math.min(width, rounds - round);
     round += lanes;
     const batches = await beforeDeadline(Promise.all(Array.from({ length: lanes }, () => pageBatch(wiki))), deadline) ?? [];
-    const protos = batches.flat().map(protoCard).filter((proto) => proto && !seen.has(proto.page.title));
+    const protos = batches.flat().map((page) => protoCard(page, wiki)).filter((proto) => proto && !seen.has(proto.page.title));
     for (const proto of protos) seen.add(proto.page.title);
 
     const short = protos.filter((proto) => !pageText(proto.page));
@@ -522,39 +561,37 @@ export async function gatherCustom(wiki, pack, wanted, seen, deadline, tally, { 
     for (const proto of protos) {
       const text = pageText(proto.page) ?? proto.text;
       if (!text) { later.push(proto); continue; }
-      if (!isUsableText(proto.page.title, text)) { tally.noText++; continue; }
+      if (!isUsableText(proto.page.title, text) || text.length < CUSTOM_TEXT_MIN) { tally.noText++; continue; }
+      if (offTopic(proto.page, text, wiki)) { tally.offTopic = (tally.offTopic ?? 0) + 1; continue; }
       if (!wiki.mature && maturePage(proto.page, text)) { tallyMiss(tally, 'MATURE'); continue; }
       proto.text = text;
       ready.push(proto);
     }
-    const bare = ready.filter((proto) => !pageImage(proto.page));
-    if (bare.length && !late() && out.length + ready.length - bare.length < wanted) {
-      const files = await beforeDeadline(pageFiles(wiki, bare.map((p) => p.page)).catch(() => null), deadline);
-      for (const proto of bare) proto.file = files?.get(proto.page.pageid) ?? null;
-    }
     for (const proto of ready) {
-      const own = pageImage(proto.page) ?? proto.file;
+      const own = pageImage(proto.page);
       if (own) out.push(customCard(wiki, proto, pack, proto.text, { thumbnail: own }));
     }
     const need = wanted - out.length;
-    const still = ready.filter((proto) => !pageImage(proto.page) && !proto.file);
+    const still = ready.filter((proto) => !pageImage(proto.page));
     if (need > 0 && still.length && !late()) {
-      const picks = still.slice(0, need + 2);
+      const picks = still.slice(0, Math.max(need + 2, FILE_BATCH));
       const arts = await beforeDeadline(findPictures(picks.map((p) => p.page), {
         apiUrl: wiki.apiUrl, hint: wiki.topic ?? pack.name, allowMature: Boolean(wiki.mature), look, deadline
       }).catch(() => null), deadline);
       const made = picks.map((proto) => customCard(wiki, proto, pack, proto.text, arts?.get(proto.page.title) ?? textPicture(proto.page.title, look)));
-      out.push(...made.sort((a, b) => (a.picture?.source === 'text' ? 1 : 0) - (b.picture?.source === 'text' ? 1 : 0)));
+      out.push(...made.filter((card) => card.picture?.source !== 'text'));
+      spare.push(...made.filter((card) => card.picture?.source === 'text'));
     }
     const missing = wanted - out.length;
     if (missing > 0 && later.length && !late()) {
       const built = await Promise.all(later.slice(0, missing + 2).map((proto) =>
         beforeDeadline(finishCustomCard(wiki, proto, pack).catch((err) => { tallyMiss(tally, err?.message); return null; }), deadline)));
-      for (const card of built) if (card) out.push(card);
+      for (const card of built) if (card) (card.picture?.source === 'text' ? spare : out).push(card);
     }
     console.info(`Wikster custom draw "${pack.name}" on ${wiki.apiUrl}: round ${round}, ${protos.length} candidates, ${out.length} cards; turned away: ${tally.noText} without text, ${tally.mature ?? 0} mature, ${tally.other} other`);
     if (batches.every((batch) => !batch.length)) break;
   }
+  if (out.length < wanted) out.push(...spare.slice(0, wanted - out.length));
   return out;
 }
 
@@ -608,6 +645,7 @@ export async function drawCustomSet(pack, { budget = DRAW_BUDGET_MS } = {}) {
   const keep = (card) => {
     if (out.length >= wanted || seen.has(card?.title)) return false;
     seen.add(card.title);
+    if (!stockable(card, wiki)) return false;
     if (!wiki.mature && (card.mature || maturePage(card))) return false;
     out.push({ ...card, description: pack.name, lang: getLanguage(), ...(wiki.mature ? { mature: true } : {}) });
     return true;
@@ -695,6 +733,7 @@ export async function drawCustomMany(pack, n, { budget = DRAW_BUDGET_MS } = {}) 
   const keep = (card) => {
     if (out.length >= total || seen.has(card?.title)) return false;
     seen.add(card.title);
+    if (!stockable(card, wiki)) return false;
     if (!wiki.mature && (card.mature || maturePage(card))) return false;
     out.push({ ...card, description: pack.name, lang: getLanguage(), ...(wiki.mature ? { mature: true } : {}) });
     return true;
