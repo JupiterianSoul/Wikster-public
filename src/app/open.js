@@ -316,7 +316,7 @@ export function unhushOpen() {
   release?.();
 }
 
-on('screen', (name) => { if (name !== 'open') unhushOpen(); });
+on('screen', (name) => { if (name !== 'open') { stopEffect(); unhushOpen(); } });
 
 export async function completeRip() {
   if (rip.done) return;
@@ -567,6 +567,7 @@ export function openScreenFor(spec, { batch = false } = {}) {
   state.openNonce = null;
   state.growing = false;
   brew(false);
+  stopEffect();
   unhushOpen();
 
   if (spec.kind === 'custom') state.packMode = 'custom';
@@ -700,9 +701,23 @@ export function arrivalsDone(cards, max) {
   });
 }
 
-function startArrival(booster, effect) {
+let fxStop = null;
+
+function stopEffect() {
+  const stop = fxStop;
+  fxStop = null;
+  stop?.abort();
+}
+
+function startArrival(booster, effect, hold = null) {
   const count = state.cards.length;
-  const showing = effect ? runEffect(effect, booster) : null;
+  let showing = null;
+  if (effect) {
+    stopEffect();
+    const stop = typeof AbortController === 'function' ? new AbortController() : null;
+    fxStop = stop;
+    showing = runEffect(effect, booster, state.cards, { hold, signal: stop?.signal }).finally(() => { if (fxStop === stop) fxStop = null; });
+  }
   if (!effect) state.cards.forEach((card, i) => {
     const side = i % 2 ? 1 : -1;
     card.style.setProperty('--spin', `${(side * (10 + Math.random() * 16)).toFixed(1)}deg`);
@@ -787,7 +802,7 @@ async function batchEffect(booster, count, effect) {
   });
 }
 
-async function layCards(booster, count) {
+async function layCards(booster, count, hold = null) {
   if (state.batch) {
     el.openScreen.classList.add('is-batch');
     const effect = !fastOpen() && wornOpening();
@@ -822,7 +837,7 @@ async function layCards(booster, count) {
     state.cards = Array.from({ length: count }, (_, i) => buildPlaceholderCard(i, count));
     el.cardStack.replaceChildren(...state.cards);
   }
-  const arriving = startArrival(booster, effect);
+  const arriving = startArrival(booster, effect, hold);
   if (!effect) {
     await wait(EMERGE_STAGGER * 2);
     booster.classList.add('is-leaving');
@@ -854,11 +869,11 @@ export async function runOpen(booster) {
   el.openHint.textContent = '';
   booster.classList.remove('is-idle');
 
-  const arriving = layCards(booster, state.spec.cards);
   const guarded = Promise.race([
     drawing,
     wait(DRAW_HARD_LIMIT).then(() => ({ error: new Error('TIMEOUT') }))
   ]);
+  const arriving = layCards(booster, state.spec.cards, guarded);
   brewUntil(arriving, guarded);
   const [articles] = await Promise.all([guarded, arriving]);
   brewDone();
@@ -940,6 +955,7 @@ async function drawMany(spec, n) {
 }
 
 function openFailed(why) {
+  stopEffect();
   unhushOpen();
   brew(false);
   state.growing = false;
@@ -1299,7 +1315,7 @@ async function openArriving(booster, spec) {
   beginOpening(booster);
   let got = null;
   const waiting = waitForPull(spec, here).then((pull) => { got = pull; return pull; });
-  const laying = layCards(booster, Math.max(1, Number(spec.cards) || 1)).then(() => {
+  const laying = layCards(booster, Math.max(1, Number(spec.cards) || 1), waiting).then(() => {
     if (got || !here()) return;
     layoutDeck();
     markArriving(0);

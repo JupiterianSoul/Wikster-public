@@ -455,6 +455,12 @@ function onKey(event) {
     return;
   }
   if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (live.sheet?.open && el.sheet?.classList.contains('is-locked') && (event.key === 'Enter' || event.key === ' ')
+    && !(event.target instanceof HTMLElement && event.target.closest('#sheet button, #sheet a, #sheet [tabindex]'))) {
+    const primary = el.sheet.querySelector('.btn-primary:not([disabled])');
+    if (primary) { primary.click(); event.preventDefault(); event.stopImmediatePropagation(); }
+    return;
+  }
   if (live.sheet?.open || !el.drawer?.hidden) return;
   if (document.documentElement.classList.contains('is-immersive')) {
     if (typing(event.target)) return;
