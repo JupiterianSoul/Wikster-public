@@ -16,19 +16,17 @@ import { canonical } from '../appearance.js';
 import { isFriendLook } from '../friendcodes.js';
 import { on } from '../ui/bus.js';
 import { ownAppearance } from './lookview.js';
-import { DEFAULT_FRAME_STYLE, FRAME_STYLES } from '../frames.js';
+import { DEFAULT_FRAME_STYLE, FRAME_STYLES } from '../framemeta.js';
 import { renderBinder } from './binder.js';
 import { endSplash, showWelcome } from './boot.js';
 import { SPECIAL_FIX_KEY, VIEWS_FIX_KEY, applyStrings, el, flushPlaytime, refreshWallet, refreshWornTheme, showScreen, showUpdateBar, state, storedTheme, toast, useTheme } from './core.js';
-import { openDaily } from './daily.js';
 import { live } from './live.js';
 import { dropReady, warmDrawer } from './open.js';
 import { renderPacks } from './packs.js';
-import { achievementsUnlocked, allBadgeStates, refreshLevelBadge, updateBadges, wornBadges } from './regalia.js';
-import { summaryLanded, summaryToSend } from './statsboard.js';
-import { applySettings, renderAccountRow } from './settings.js';
+import { loadHonours, refreshLevelBadge, updateBadges } from './regalia.js';
+import { applySettings, renderAccountRow } from './prefs.js';
 import { applyMatureLock } from './mature.js';
-import { payStipend, renderShop } from './shop.js';
+import { payStipend, renderShop } from './stipend.js';
 import { collectDeliveries, fullDigest, giftsWaiting, liveSocialUp, readDigest, startLiveSocial, stopLiveSocial, syncSocial } from './social.js';
 import { startLiveOps } from './liveops.js';
 import * as leaderboard from '../leaderboard.js';
@@ -333,7 +331,8 @@ let statsSent = '';
 let showcaseSent = '';
 const PLAY_STEP = 900000;
 
-export function currentStats() {
+export async function currentStats() {
+  const { achievementsUnlocked, allBadgeStates, wornBadges } = await loadHonours();
   const entries = store.allEntries(state.collection);
   const counts = state.profile.rarityCounts ?? {};
   const best = RARITIES.filter((r) => (counts[r.id] ?? 0) > 0).pop();
@@ -384,7 +383,7 @@ export async function flushSync() {
     const pushed = await account.pushSave(userId());
     if (pushed === 'outdated') { state.account.outdated = true; showUpdateBar('outdated'); return; }
     if (pushed === 'merged') takeMerge();
-    const stats = currentStats();
+    const stats = await currentStats();
     const said = JSON.stringify(stats);
     if (said !== statsSent) {
       await account.publishStats(userId(), stats);
@@ -435,7 +434,8 @@ on('look', () => syncSoon());
 
 async function flushKeys() {
   if (!account.keysWanted(userId())) return false;
-  const full = currentStats();
+  const full = await currentStats();
+  const { summaryLanded, summaryToSend } = await import('./statsboard.js');
   const stats = {
     playMs: full.playMs,
     rank: full.rank,
@@ -550,7 +550,7 @@ function welcomeOrDaily({ stipend = true } = {}) {
   if (!languageChosen() || !state.profile.started) showWelcome();
   else {
     if (stipend) payStipend();
-    if (canClaim(state.profile.daily)) openDaily({ auto: true });
+    if (canClaim(state.profile.daily)) import('./daily.js').then((m) => m.openDaily({ auto: true }));
   }
 }
 

@@ -5,7 +5,7 @@ import { getLanguage, t } from '../i18n.js';
 import { ECON_KEYS, MAX_CUSTOM_PACKS } from '../econ/core.js';
 import { captureError } from './errors.js';
 import { SERVER_ONLY, predict } from '../econ/local.js';
-import { esc, refreshWallet, refreshWornTheme, state, storedTheme, toast } from './core.js';
+import { esc, refreshWallet, refreshWornTheme, state, storedTheme, toast, useToastGate } from './core.js';
 import { isFriendLook } from '../friendcodes.js';
 import { androidApp } from '../platform.js';
 import { specialPhoto, withSpecialPhoto } from '../codedefs.js';
@@ -116,6 +116,43 @@ export function loadEngine() {
 
 let overlay = null;
 export const useServerOverlay = (fn) => { overlay = fn; };
+
+const marks = new WeakMap();
+let keyMarks = new Map();
+let replaceMark = null;
+let docMark = null;
+let serverTotals = null;
+
+const markOf = (data) => (data && typeof data === 'object' ? marks.get(data) ?? null : null);
+
+function stamp(data, sent) {
+  if (!data || typeof data !== 'object') return data;
+  const rev = Number(data.state?.rev);
+  marks.set(data, { sent, got: Date.now(), rev: data.state && Number.isFinite(rev) ? rev : null, wiped: data.state?.wiped ?? null });
+  return data;
+}
+
+function carryMark(from, to) {
+  const m = markOf(from);
+  if (m && to && typeof to === 'object') marks.set(to, m);
+  return to;
+}
+
+export function olderReply(a, b) {
+  if (!a || !b || a === b) return false;
+  if (a.got < b.sent) return true;
+  if (b.got < a.sent) return false;
+  return a.wiped === b.wiped && a.rev != null && b.rev != null && a.rev < b.rev;
+}
+
+const keyMarkOf = (key) => keyMarks.get(key) ?? replaceMark;
+
+function forgetMarks() {
+  keyMarks = new Map();
+  replaceMark = null;
+  docMark = null;
+  serverTotals = null;
+}
 export const economyUser = () => econUser;
 export const econStateNow = () => econState;
 
@@ -145,23 +182,55 @@ export function refreshPins(cards, renamed) {
   return true;
 }
 
+function applyCards(res, mark, lay) {
+  const entries = () => state.collection.entries;
+  const whole = res.replace && !(mark && replaceMark && olderReply(mark, replaceMark));
+  if (whole) {
+    const keep = new Map();
+    if (mark) for (const [key, m] of keyMarks) if (olderReply(mark, m)) keep.set(key, m);
+    const next = {};
+    for (const [key, entry] of Object.entries(res.cards)) if (entry && !keep.has(key)) next[key] = withSpecialPhoto(entry);
+    for (const key of keep.keys()) { const had = entries()[key]; if (had) next[key] = had; }
+    state.collection = { ...state.collection, entries: next };
+    if (mark) { keyMarks = keep; replaceMark = mark; }
+    lay?.cards(next, null, res.state ?? econState, keep.size ? new Set(keep.keys()) : null);
+    return Object.keys(res.cards).filter((key) => !keep.has(key));
+  }
+  const applied = [];
+  for (const [key, entry] of Object.entries(res.cards)) {
+    if (mark && olderReply(mark, keyMarkOf(key))) continue;
+    if (entry) entries()[key] = withSpecialPhoto(entry);
+    else delete entries()[key];
+    if (mark) keyMarks.set(key, mark);
+    applied.push(key);
+  }
+  if (applied.length) lay?.cards(entries(), applied, res.state ?? econState);
+  return applied;
+}
+
 export function applyEcon(res, { server = false } = {}) {
   if (!res || typeof res !== 'object') return res;
   const lay = server && overlay ? overlay : null;
-  if (res.state && typeof res.state === 'object') {
+  const mark = server ? markOf(res) : null;
+  const stale = Boolean(mark && docMark && olderReply(mark, docMark));
+  if (mark && !stale && (res.state || res.wallet || res.inventory)) docMark = mark;
+  if (server && !stale && res.totals && Number.isFinite(Number(res.totals.cards)) && Number.isFinite(Number(res.totals.unique))) {
+    serverTotals = { cards: Number(res.totals.cards), unique: Number(res.totals.unique) };
+  }
+  if (!stale && res.state && typeof res.state === 'object') {
     const was = econState;
     econState = res.state;
     keepState();
     if (server) for (const fn of stateWatchers) { try { fn(was, res.state); } catch {} }
   }
-  if (Number.isFinite(res.since) && econUser) { sinceAt = res.since; writeSince(); }
-  if (res.wallet) {
+  if (!stale && Number.isFinite(res.since) && econUser) { sinceAt = res.since; writeSince(); }
+  if (!stale && res.wallet) {
     state.wallet = Math.max(0, Number(res.wallet.coins) || 0);
     store.saveWallet(state.wallet);
     state.ink = Math.max(0, Number(res.wallet.ink) || 0);
     saveInk(state.ink);
   }
-  if (res.inventory && typeof res.inventory === 'object') {
+  if (!stale && res.inventory && typeof res.inventory === 'object') {
     state.inventory = Object.fromEntries(Object.entries(res.inventory)
       .filter(([, slot]) => slot?.spec && slot.count > 0)
       .map(([id, slot]) => [id, { spec: slot.spec, count: slot.count }]));
@@ -169,16 +238,11 @@ export function applyEcon(res, { server = false } = {}) {
     store.saveInventory(state.inventory);
   }
   if (res.cards && typeof res.cards === 'object' && !Array.isArray(res.cards)) {
-    if (res.replace) state.collection = { ...state.collection, entries: {} };
-    for (const [key, entry] of Object.entries(res.cards)) {
-      if (entry) state.collection.entries[key] = withSpecialPhoto(entry);
-      else delete state.collection.entries[key];
-    }
-    lay?.cards(state.collection.entries, res.replace ? null : Object.keys(res.cards), res.state ?? econState);
+    const applied = applyCards(res, mark, lay);
     store.saveCollection(state.collection);
-    if (server) refreshPins(res.cards, res.renamed);
+    if (server && applied.length) refreshPins(Object.fromEntries(applied.map((key) => [key, res.cards[key]])), res.renamed);
   }
-  if (res.state && typeof res.state === 'object') {
+  if (!stale && res.state && typeof res.state === 'object') {
     for (const key of MIRRORED) {
       if (res.state[key] === undefined) delete state.profile[key];
       else state.profile[key] = res.state[key];
@@ -187,7 +251,7 @@ export function applyEcon(res, { server = false } = {}) {
     store.saveProfile(state.profile);
     if (isFriendLook(storedTheme())) refreshWornTheme();
   }
-  if (Array.isArray(res.custom)) state.customPacks = store.replaceCustomPacks(res.custom);
+  if (!stale && Array.isArray(res.custom)) state.customPacks = store.replaceCustomPacks(res.custom);
   refreshWallet();
   return res;
 }
@@ -266,19 +330,80 @@ function drain() {
   const again = recheck;
   recheck = false;
   if (clean && !again) markClean();
-  if (failed) {
-    toast(esc(econMessage(failed, t)), 'error');
-    send('snapshot', {}, { timeout: SLOW_TIMEOUT_MS, patient: true }).catch(() => {});
-    return;
-  }
-  if (again) send('snapshot', {}, { timeout: SLOW_TIMEOUT_MS, patient: true }).catch(() => {});
+  const unsure = doubted;
+  doubted = false;
+  if (failed) toast(esc(econMessage(failed, t)), 'error');
+  if (failed || again || unsure) settleSoon();
   if (replies.length && shownSignature() !== shown) for (const fn of settleWatchers) { try { fn(); } catch {} }
+  if (!failed && !again && !unsure) setTimeout(checkTotals, 0);
+}
+
+const SETTLE_TRIES = 6;
+let settleTimer = null;
+let settling = false;
+let settleTries = 0;
+
+function settleSoon() {
+  if (settling || settleTimer || !live || !econUser) return;
+  const wait = settleTries ? retryDelay(settleTries - 1) : 0;
+  settleTimer = setTimeout(runSettle, wait);
+}
+
+function runSettle() {
+  settleTimer = null;
+  if (!live || !econUser || settling) return;
+  settling = true;
+  const user = econUser;
+  send('snapshot', {}, { timeout: SLOW_TIMEOUT_MS })
+    .then(() => { settleTries = 0; }, () => { settleTries++; })
+    .finally(() => {
+      settling = false;
+      if (settleTries && settleTries < SETTLE_TRIES && econUser === user) settleSoon();
+    });
+}
+
+const HEAL_GAP_MS = 120000;
+let healAt = 0;
+let healing = false;
+let healFailed = false;
+
+export function localTotals(entries = state.collection?.entries ?? {}) {
+  let cards = 0;
+  let unique = 0;
+  for (const entry of Object.values(entries)) {
+    if (!entry) continue;
+    unique++;
+    cards += Math.max(1, Number(entry.count) || 1);
+  }
+  return { cards, unique };
+}
+
+export function checkTotals() {
+  if (!live || !econUser || !serverTotals || healFailed || healing || settling || settleTimer) return false;
+  if (inFlight > 0 || line.length) return false;
+  try { if (overlay?.pending?.()) return false; } catch { return false; }
+  const mine = localTotals();
+  if (mine.cards === serverTotals.cards && mine.unique === serverTotals.unique) return false;
+  if (Date.now() - healAt < HEAL_GAP_MS) return false;
+  healAt = Date.now();
+  healing = true;
+  const user = econUser;
+  send('snapshot', {}, { timeout: SLOW_TIMEOUT_MS })
+    .then(() => {
+      if (econUser !== user || !serverTotals) return;
+      try { if (overlay?.pending?.()) return; } catch {}
+      const now = localTotals();
+      if (now.cards !== serverTotals.cards || now.unique !== serverTotals.unique) healFailed = true;
+    }, () => {})
+    .finally(() => { healing = false; });
+  return true;
 }
 
 let lastAsk = 0;
 let lastInput = 0;
 let readyHook = null;
 let recheck = false;
+let doubted = false;
 export const useReadyHook = (hook) => { readyHook = hook; };
 
 const retryWatchers = new Set();
@@ -310,7 +435,8 @@ async function ask(action, args, timeout) {
     if (wanted) { try { readyHook?.done(null, sentAt); } catch {} }
     throw error;
   }
-  data = mend(data, base, user);
+  if (Date.now() - sentAt < OUTAGE_CLEAR_MS) outageToldAt = 0;
+  data = stamp(mend(data, base, user), sentAt);
   if (wanted) { try { readyHook?.done(data?.readyNow ?? null, sentAt); } catch {} }
   return data;
 }
@@ -372,11 +498,11 @@ async function sendBatch(group) {
   if (data?.settled) { for (const job of group) job.resolve({}); return; }
   const results = Array.isArray(data?.results) ? data.results : [];
   const final = {};
-  for (const k of ['wallet', 'state', 'inventory']) if (data?.[k]) final[k] = data[k];
+  for (const k of ['wallet', 'state', 'inventory', 'totals']) if (data?.[k]) final[k] = data[k];
   group.forEach((job, i) => {
     const r = results[i];
-    if (r?.ok) job.resolve({ ...r.ok, ...final });
-    else if (doubt && r?.error && r.error !== 'FAILED') { recheck = true; job.resolve({ ...final }); }
+    if (r?.ok) job.resolve(carryMark(data, { ...r.ok, ...final }));
+    else if (doubt && r?.error && r.error !== 'FAILED') { recheck = true; job.resolve(carryMark(data, { ...final })); }
     else job.reject(Object.assign(new Error(String(r?.error ?? 'FAILED')), { action: job.action }));
   });
 }
@@ -412,14 +538,20 @@ function send(action, args, { timeout, predicted = false, after = null, gather =
   }, (error) => {
     failedAny = true;
     if (predicted) broken ??= error;
+    else if (failureKind(error) === 'unknown' && !resendSafe(action, args)) doubted = true;
     throw error;
   }).finally(() => {
     inFlight--;
-    if (!inFlight) { drain(); settle(); }
+    if (inFlight) return;
+    const done = settle;
+    drain();
+    if (inFlight) idle.then(done);
+    else done();
   });
 }
 
 export const economyBusy = () => inFlight > 0;
+export const economySettling = () => settling || Boolean(settleTimer) || healing;
 
 export function flushEconomy() {
   keepBase();
@@ -440,6 +572,7 @@ export function applyServer(data) {
   const shown = shownSignature();
   applyAndWatch(data, true);
   if (shownSignature() !== shown) for (const fn of settleWatchers) { try { fn(); } catch {} }
+  setTimeout(checkTotals, 0);
 }
 
 export function economyIdle() {
@@ -522,6 +655,7 @@ export function warmEconomy() {
 
 export async function startEconomy(userId) {
   if (!userId) { live = false; return false; }
+  useToastGate(outageGate);
   loadEngine();
   econUser = userId;
   held = keptBase(userId);
@@ -568,6 +702,12 @@ export function stopEconomy() {
   econUser = null;
   econState = {};
   held = null;
+  forgetMarks();
+  clearTimeout(settleTimer);
+  settleTimer = null;
+  settleTries = 0;
+  healAt = 0;
+  healFailed = false;
   try { localStorage.removeItem(BASE_KEY); } catch {}
   sinceAt = null;
   dirty = false;
@@ -626,6 +766,19 @@ const ACTION_MESSAGES = {
   customSave: { TOO_MANY: ['econTooManyCustom', { max: MAX_CUSTOM_PACKS }] },
   wikiFind: { TOO_MANY: ['slowDown', {}] }
 };
+
+const OUTAGE_KEYS = ['econSlow', 'econServerDown', 'econServerBusy', 'econOffline', 'slowDown'];
+const OUTAGE_REMIND_MS = 60000;
+const OUTAGE_CLEAR_MS = 4000;
+let outageToldAt = 0;
+
+function outageGate(markup) {
+  const text = String(markup ?? '');
+  if (!OUTAGE_KEYS.some((key) => { const said = t(key); return said === text || esc(said) === text; })) return true;
+  if (outageToldAt && Date.now() - outageToldAt < OUTAGE_REMIND_MS) return false;
+  outageToldAt = Date.now();
+  return true;
+}
 
 const DIAGNOSE = new Set(['FAILED', 'SERVER_DOWN', 'NO_FINDER', 'NOT_LIVE', 'WIKI_DOWN', 'DRAW_FAILED']);
 const reported = new Set();

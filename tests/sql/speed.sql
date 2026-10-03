@@ -88,3 +88,11 @@ select t_fails($q$select econ_load('5bee0000-0000-0000-0000-000000000003', 'batc
 select t_is('row policies read the caller once per query, not once per row', not exists (
   select 1 from pg_policies where schemaname = 'public'
     and regexp_replace(coalesce(qual, '') || ' ' || coalesce(with_check, ''), '\(\s*SELECT auth\.uid\(\) AS uid\)', '', 'gi') ~* 'auth\.uid\(\)'));
+select t_is('a load carries the card totals the phone checks itself against', (select (d->'totals'->>'cards')::bigint = (select sum(copies) from cards where user_id = '5bee0000-0000-0000-0000-000000000003')
+  and (d->'totals'->>'unique')::integer = (select count(*) from cards where user_id = '5bee0000-0000-0000-0000-000000000003')
+  from (select econ_load('5bee0000-0000-0000-0000-000000000003') d) x));
+create temp table t_totals as select econ_apply('5bee0000-0000-0000-0000-000000000003', '{"add":[{"key":"t9","title":"T9","price":3,"copies":2}]}') d;
+select t_is('and so does every change, with the totals after it', (select (d->'totals'->>'cards')::bigint = (select sum(copies) from cards where user_id = '5bee0000-0000-0000-0000-000000000003')
+  and (d->'totals'->>'unique')::integer = (select count(*) from cards where user_id = '5bee0000-0000-0000-0000-000000000003')
+  from t_totals));
+drop table t_totals;

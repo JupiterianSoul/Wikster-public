@@ -1,4 +1,4 @@
-import { configured, supabase } from './client.js';
+import { ANON_KEY, URL as API_URL, configured, keptFetch, supabase } from './client.js';
 
 const drop = (channel) => {
   if (!channel) return;
@@ -57,14 +57,70 @@ export function onLive(kind, fn) {
   return () => listeners.get(kind)?.delete(fn);
 }
 
+const confirmed = new Set();
+const waiting = new Set();
+let asking = null;
+
+function heardInbox(selfId, event) {
+  if (event.kind !== 'message') return;
+  const id = String(event.row?.id ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(id) || confirmed.has(id) || waiting.has(id) || waiting.size >= 40) return;
+  waiting.add(id);
+  asking ??= setTimeout(() => confirmInbox(selfId), 30);
+}
+
+async function confirmInbox(selfId) {
+  const ids = [...waiting].slice(0, 20);
+  for (const id of ids) waiting.delete(id);
+  try {
+    const { data, error } = await supabase.from('messages')
+      .select('id, sender, recipient, body, created_at, read_at')
+      .in('id', ids).eq('recipient', selfId);
+    if (!error && mine?.id === selfId) {
+      for (const row of [...(data ?? [])].sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))) {
+        if (confirmed.has(row.id)) continue;
+        confirmed.add(row.id);
+        if (confirmed.size > 400) confirmed.delete(confirmed.values().next().value);
+        tell({ kind: 'message', type: 'INSERT', row, payload: { type: 'INSERT', row } });
+      }
+    }
+  } catch {}
+  asking = waiting.size ? setTimeout(() => confirmInbox(selfId), 30) : null;
+}
+
+export async function announceMessage(row) {
+  if (!configured || !row?.id || !row.sender || !row.recipient) return false;
+  const payload = { type: 'INSERT', row: { id: row.id, sender: row.sender, recipient: row.recipient, created_at: row.created_at ?? null } };
+  try {
+    const token = (await supabase.auth.getSession())?.data?.session?.access_token;
+    if (token) {
+      const res = await keptFetch(`${API_URL}/realtime/v1/api/broadcast`, {
+        method: 'POST',
+        headers: { apikey: ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ topic: `inbox:${row.recipient}`, event: 'message', payload, private: true }] }),
+        signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(6000) : undefined
+      });
+      if (res.ok) return true;
+    }
+  } catch {}
+  try {
+    const { data, error } = await supabase.rpc('message_live', { p_id: row.id });
+    return !error && data === true;
+  } catch {
+    return false;
+  }
+}
+
 export function openLive(selfId) {
   if (!configured || !selfId) return { close() {} };
   if (mine?.id !== selfId || !mine.wire.alive()) {
     mine?.wire.close();
     mine?.world.close();
+    mine?.inbox.close();
     const wire = openPrivate(`user:${selfId}`, tell);
     const world = openPrivate('world', tell);
-    mine = { id: selfId, wire, world };
+    const inbox = openPrivate(`inbox:${selfId}`, (event) => heardInbox(selfId, event));
+    mine = { id: selfId, wire, world, inbox };
   }
   const held = mine;
   return {
@@ -73,6 +129,7 @@ export function openLive(selfId) {
       if (mine !== held) return;
       held.wire.close();
       held.world.close();
+      held.inbox.close();
       mine = null;
     }
   };

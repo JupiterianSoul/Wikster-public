@@ -54,6 +54,7 @@ select t_fails($q$select rate_limit('dddddddd-0000-0000-0000-000000000001', 'eco
 select t_is('a player cannot read the blocked wiki list', (select count(*) from blocked_hosts) = 0);
 
 reset role;
+select t_is('the chat limit writes no counters', not exists (select 1 from rate_counters where bucket like 'message%'));
 insert into blocked_hosts (host, reason) values ('badwiki.example', 'test');
 select rate_limit('dddddddd-0000-0000-0000-000000000002', 'economy', 2, 60);
 select rate_limit('dddddddd-0000-0000-0000-000000000002', 'economy', 2, 60);

@@ -1,4 +1,5 @@
 declare const __WIKSTER_BUILD__: { sha: string; at: number } | undefined;
+declare const __WIKSTER_LATEST_RELEASE__: string | undefined;
 
 interface Window {
   WiksterIcon?: { setIcon(id: string): void };

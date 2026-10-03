@@ -77,6 +77,13 @@ select t_is('a booster spec is filled in the same way everywhere',
 select t_is('a custom booster keeps its wiki and name', (select x->'spec' = '{"kind": "custom", "themeId": null, "rarityId": null, "cards": 5,
   "wiki": {"apiUrl": "https://starwars.fandom.com/api.php", "sitename": "SW"}, "customName": "Star Wars"}'::jsonb
   from admin_item_check((select item from shapes where n = 3), 'grant') x));
+select t_is('a custom booster from the wiki finder keeps its topic, language and mature mark', admin_spec_check('{"kind": "custom", "cards": 4,
+  "wiki": {"apiUrl": "https://en.wikipedia.org/w/api.php", "sitename": "Wikipedia", "topic": "Volcano", "lang": "en", "mature": true, "server": "https://en.wikipedia.org"},
+  "customName": "Volcano", "customTagline": "Wikipedia · Volcano", "icon": "wand", "accent": "#a78bfa", "accent2": "#4c1d95"}')
+  = '{"kind": "custom", "themeId": null, "rarityId": null, "cards": 4, "wiki": {"apiUrl": "https://en.wikipedia.org/w/api.php", "sitename": "Wikipedia",
+  "topic": "Volcano", "lang": "en", "mature": true}, "customName": "Volcano", "customTagline": "Wikipedia · Volcano", "icon": "wand", "accent": "#a78bfa", "accent2": "#4c1d95"}'::jsonb);
+select t_is('a bad language and a mature mark that is not true are dropped', admin_spec_check('{"kind": "custom", "cards": 4,
+  "wiki": {"apiUrl": "https://starwars.fandom.com/api.php", "lang": "EN_us", "mature": "yes"}}')->'wiki' = '{"apiUrl": "https://starwars.fandom.com/api.php"}'::jsonb);
 select t_is('several cosmetics are kept once each', admin_item_check((select item from shapes where n = 9), 'code')
   = '{"kind": "owned", "bucket": "themes", "ids": ["aurora", "noir"]}'::jsonb);
 select t_is('every shape passes in a grant and in a code alike', (select bool_and(admin_item_check(item, 'grant') = admin_item_check(item, 'code')) from shapes));

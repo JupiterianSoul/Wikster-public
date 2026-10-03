@@ -2114,8 +2114,6 @@ html.is-pc { --sw-w: 3.4rem; --sw-h: 2rem; }
 .is-pc #screen-games .game-tile-play { display: inline; color: #0b0b10; font-weight: 900; font-size: 0.95rem; letter-spacing: 0.14em; text-transform: uppercase; }
 .is-pc #screen-games.is-active { display: flex; flex-direction: column; justify-content: center; min-height: 100%; }
 .is-pc #app .screen-sub { text-align: center; }
-#screen-friends.is-guest :is(.people, .section-head, .empty, .schema-note, .find, .find-status) { display: none !important; }
-#screen-friends.is-guest #friends-gate { min-height: 60vh; align-content: center; }
 .is-pc #screen-open.is-active { height: 100dvh; min-height: 0; overflow: clip; }
 .is-pc #screen-open .open-top { position: relative; min-height: 3rem; }
 .is-pc #screen-open .open-title { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 44%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }

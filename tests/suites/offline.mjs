@@ -31,6 +31,12 @@ check('and its icons', iconOk);
 const sw = await p.evaluate(async () => (await fetch('./sw.js')).text());
 check('the worker is served with this build\'s files in it', /PRECACHE = \[/.test(sw) && /assets\/index-/.test(sw));
 check('and without the music', !/\.mp3/.test(sw.split('PRECACHE = ')[1].split('];')[0]));
+const listed = (name) => JSON.parse(sw.split(`const ${name} = `)[1].split(';\n')[0]);
+const precache = listed('PRECACHE');
+const later = listed('LATER');
+check('the first visit stores only what the game boots with', precache.filter((f) => f.endsWith('.js')).length <= 3, precache.join(' '));
+check('screens, games and data wait for later', later.some((f) => /settings-/.test(f)) && later.some((f) => /market-/.test(f)) && later.some((f) => /i18n-fr-/.test(f)) && later.some((f) => /wikdle-words-/.test(f)));
+check('nothing is in both lists', !later.some((f) => precache.includes(f)));
 
 await p.waitForTimeout(4500);
 const state = await p.evaluate(async () => {
@@ -48,12 +54,30 @@ const stored = await p.evaluate(async () => {
 });
 check('with the page, the scripts, the styles and the sounds', stored >= 8, String(stored));
 
+const warmed = await p.evaluate(async (count) => {
+  const reg = await navigator.serviceWorker.ready;
+  reg.active.postMessage({ type: 'warm', lang: 'en' });
+  const cache = await caches.open((await caches.keys()).find((k) => k.startsWith('wikster-shell-')));
+  for (let i = 0; i < 80; i++) {
+    const keys = (await cache.keys()).map((r) => r.url);
+    if (keys.filter((u) => /\/assets\/.+\.(js|css)$/.test(u)).length >= count) return keys;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return (await cache.keys()).map((r) => r.url);
+}, precache.filter((f) => /\.(js|css)$/.test(f)).length + later.filter((f) => !/i18n-fr-|wikdle-words-fr-/.test(f)).length);
+check('on a roomy connection the rest is stored in the background', later.filter((f) => !/i18n-fr-|wikdle-words-fr-/.test(f)).every((f) => warmed.some((u) => u.endsWith(f.slice(1)))), String(warmed.length));
+check('but not the other language', !warmed.some((u) => /i18n-fr-|wikdle-words-fr-/.test(u)));
+
 await ctx.setOffline(true);
 await p.reload({ waitUntil: 'domcontentloaded' });
 await p.waitForTimeout(2500);
 check('offline, the page still loads', await p.locator('#app').isVisible());
 check('and the app is painted', (await p.locator('.nav-item').count()) >= 5, String(await p.locator('.nav-item').count()));
 check('the shop is reachable', await p.locator('.nav-item[data-tab="shop"]').isVisible());
+await p.locator('#menu-btn').click();
+await p.locator('.drawer-link[data-link="settings"]').click();
+await p.waitForSelector('#screen-settings.is-active #settings-list .row', { timeout: 8000 }).catch(() => {});
+check('a screen loaded on demand still opens offline', await p.locator('#screen-settings.is-active #settings-list .row').count() > 0);
 await p.screenshot({ path: 'offline-shell.png' });
 await ctx.setOffline(false);
 

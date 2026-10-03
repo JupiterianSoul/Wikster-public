@@ -190,8 +190,14 @@ export async function fetchMonthlyViews(title) {
 
 export const readDayBefore = (now = Date.now()) => dayBefore(now);
 
+export function topReadDay(day, now = Date.now()) {
+  const last = dayBefore(now);
+  const asked = String(day ?? '');
+  return /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= last ? asked : last;
+}
+
 export async function fetchTopRead(day = readDayBefore(), lang = wikiLang(), limit = 300) {
-  const [y, m, d] = String(day).split('-');
+  const [y, m, d] = topReadDay(day).split('-');
   const url = `https://wikimedia.org/api/rest_v1/metrics/pageviews/top/${lang}.wikipedia/all-access/${y}/${m}/${d}`;
   const data = await fetchJson(url);
   const rows = data?.items?.[0]?.articles ?? [];

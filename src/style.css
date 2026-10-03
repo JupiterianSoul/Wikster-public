@@ -12,4 +12,3 @@
 @import './styles/custom.css' layer(screens);
 @import './styles/games.css' layer(games);
 @import './styles/desktop.css' layer(desktop);
-@import './styles/pc.css' layer(pc);

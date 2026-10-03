@@ -15,15 +15,23 @@ const option = (name, fallback) => {
   return hit ? hit.slice(name.length + 3) : fallback;
 };
 
+const PROFILES = {
+  mid: { cpu: 4, latency: 150, kbps: 1600, name: 'mid phone, slow 4G' },
+  low: { cpu: 6, latency: 300, kbps: 750, name: 'low end phone, 3G' }
+};
+const PROFILE = PROFILES[option('profile', 'mid')] ?? PROFILES.mid;
 const RUNS = Number(option('runs', 3));
 const PORT = Number(option('port', process.env.PORT || 4790));
-const CPU = Number(option('cpu', 4));
+const CPU = Number(option('cpu', PROFILE.cpu));
+const LATENCY = Number(option('latency', PROFILE.latency));
+const KBPS = Number(option('kbps', PROFILE.kbps));
+const FIRST = flag('first');
 const OUT = option('out', 'tests/out/dist-perfboot');
 const REF = option('ref', null);
 const AGAINST = option('against', REF ? 'tests/out/dist-perfboot-ref' : null);
 const PC = flag('pc');
 const CARDS = Number(option('cards', 400));
-const NET = { latency: 150, downloadThroughput: Math.round(1.6 * 1024 * 1024 / 8 * 0.9) };
+const NET = { latency: LATENCY, downloadThroughput: Math.round(KBPS * 1024 / 8 * 0.9) };
 
 const portOpen = (port) => new Promise((done) => {
   const sock = createConnection({ port, host: '127.0.0.1' });
@@ -139,6 +147,17 @@ async function launchOnce(page, label, base) {
   const box = page.viewportSize();
   if (PC) await page.keyboard.press('Space');
   else await page.mouse.click(box.width / 2, box.height / 2);
+  const fresh = await page.waitForFunction(() => !document.getElementById('intro')
+    && (document.querySelector('#welcome:not([hidden]) .lang-choice') || document.querySelector('#screen-packs.is-active')), null, { timeout: 60000, polling: 'raf' })
+    .then(() => page.evaluate(() => Boolean(document.querySelector('#welcome:not([hidden])')))).catch(() => false);
+  let welcome = null;
+  if (fresh) {
+    welcome = await page.evaluate(() => performance.now());
+    await page.click('#welcome .lang-choice[data-lang="en"]');
+    await page.waitForSelector('#starter:not([hidden]) #starter-go', { timeout: 60000 });
+    await page.waitForFunction(() => !document.querySelector('#starter-loot.is-loading'), null, { timeout: 60000 });
+    await page.click('#starter-go');
+  }
   await tabActive(page, 'packs').catch(() => {});
   const home = await page.evaluate(() => performance.now());
   let tabSwitch = null;
@@ -174,6 +193,7 @@ async function launchOnce(page, label, base) {
       cssBytes: sum(res.filter(isCss), 'decodedBodySize'),
       requestsBeforeReady: res.filter((r) => r.startTime <= (ready ?? 0)).length,
       requestsAfter: res.filter((r) => r.startTime > (ready ?? 0)).length,
+      files: res.filter((r) => r.name.startsWith(location.origin)).map((r) => [r.name.replace(location.origin, '').replace(/^\/(assets\/)?/, ''), Math.round(r.startTime), Math.round(r.responseEnd), r.transferSize, r.decodedBodySize]),
       nodes: document.getElementsByTagName('*').length,
       heap: performance.memory?.usedJSHeapSize ?? null
     };
@@ -186,10 +206,10 @@ async function launchOnce(page, label, base) {
   return {
     label, wall: Date.now() - started,
     fcp: data.fcp, html: data.htmlEnd, dcl: marks.dcl, ready: marks.ready, title: marks.title,
-    tapToHome: home - marks.tap, tabSwitch,
+    tapToHome: home - marks.tap, playable: home, welcome, tabSwitch,
     longBeforeReady: before(marks.ready ?? 0).length, tbtBeforeReady: tbt(before(marks.ready ?? 0)), longestBeforeReady: Math.max(0, ...before(marks.ready ?? 0).map(([, d]) => d)),
     longAfterTap: after(marks.tap ?? 0).length, tbtAfterTap: tbt(after(marks.tap ?? 0)), longestAfterTap: Math.max(0, ...after(marks.tap ?? 0).map(([, d]) => d)),
-    worstEvent,
+    worstEvent, files: data.files,
     jsFcpKB: data.jsFcpBytes / 1024, jsFcpCount: data.jsFcpCount,
     jsReadyKB: data.jsReadyBytes / 1024, jsReadyWireKB: data.jsReadyWire / 1024, jsReadyCount: data.jsReadyCount,
     cssKB: data.cssBytes / 1024, requests: data.requestsBeforeReady, requestsAfter: data.requestsAfter, nodes: data.nodes,
@@ -220,8 +240,13 @@ async function session(base) {
   const context = await browser.newContext(PC
     ? { viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 }
     : { ...devices['Pixel 7'] });
-  await context.addInitScript(seed, { entries, seen: RELEASES.at(-1).id, pc: PC });
+  if (!FIRST) await context.addInitScript(seed, { entries, seen: RELEASES.at(-1).id, pc: PC });
+  else if (PC) await context.addInitScript(() => { try { localStorage.setItem('wikster.layout.v1', 'pc'); } catch {} });
   await context.addInitScript(probe);
+  await context.addInitScript(({ effectiveType, rtt, downlink }) => {
+    const connection = Object.assign(new EventTarget(), { effectiveType, rtt, downlink, saveData: false });
+    try { Object.defineProperty(Navigator.prototype, 'connection', { get: () => connection, configurable: true }); } catch {}
+  }, { effectiveType: LATENCY >= 270 || KBPS < 700 ? '3g' : '4g', rtt: LATENCY, downlink: KBPS / 1000 });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -230,6 +255,7 @@ async function session(base) {
   slow = true;
   pipeFree = 0;
   const cold = await launchOnce(page, 'cold', base);
+  if (flag('trace')) for (const [name, start, end, wire, size] of cold.files) console.log(`  ${String(start).padStart(6)} ${String(end).padStart(6)} ${String(Math.round(wire / 1024)).padStart(5)} KB ${String(Math.round(size / 1024)).padStart(5)} KB  ${name}`);
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
   slow = false;
   const cached = await shellCached(page);
@@ -268,6 +294,8 @@ const ROWS = [
   ['ready', 'game ready (wikster:ready)', 'ms'],
   ['title', 'title screen interactive', 'ms'],
   ['tapToHome', 'tap to home screen', 'ms'],
+  ['welcome', 'welcome screen shown', 'ms'],
+  ['playable', 'home playable (from page start)', 'ms'],
   ['tabSwitch', 'first tab switch (shop)', 'ms'],
   ['longBeforeReady', 'long tasks before ready', ''],
   ['tbtBeforeReady', 'blocking time before ready', 'ms'],
@@ -293,12 +321,12 @@ for (const target of targets) {
   }
 }
 const fmt = (v, unit) => v == null ? '-' : `${unit === 'MB' ? v.toFixed(1) : Math.round(v)}${unit ? ` ${unit}` : ''}`;
-console.log(`\n${PC ? 'PC' : 'Phone (Pixel 7)'}, CPU ${CPU}x slower, slow 4G (150 ms, 1.6 Mbps), ${CARDS} cards, median of ${RUNS}`);
+console.log(`\n${PC ? 'PC' : 'Phone (Pixel 7)'}, ${PROFILE.name}: CPU ${CPU}x slower, ${LATENCY} ms, ${KBPS} kbps, ${FIRST ? 'new player' : `${CARDS} cards`}, median of ${RUNS}`);
 for (const kind of ['cold', 'warm']) {
-  console.log(`\n${kind === 'cold' ? 'Cold start (empty cache)' : 'Warm start (service worker and cache)'}`);
+  console.log(`\n${kind === 'cold' ? (FIRST ? 'First visit (empty cache, new player)' : 'Cold start (empty cache)') : (FIRST ? 'Second visit (service worker and cache)' : 'Warm start (service worker and cache)')}`);
   console.log(`${'metric'.padEnd(34)}${targets.map((t) => t.name.padStart(18)).join('')}`);
   for (const [key, name, unit] of ROWS) console.log(`${name.padEnd(34)}${targets.map((t) => fmt(t.summary[kind][key], unit).padStart(18)).join('')}`);
 }
 const file = option('json', 'tests/out/perf-boot.json');
-writeFileSync(file, JSON.stringify({ at: new Date().toISOString(), cpu: CPU, pc: PC, targets: targets.map(({ name, dir, runs, summary }) => ({ name, dir, runs, summary })) }, null, 2));
+writeFileSync(file, JSON.stringify({ at: new Date().toISOString(), cpu: CPU, latency: LATENCY, kbps: KBPS, first: FIRST, pc: PC, targets: targets.map(({ name, dir, runs, summary }) => ({ name, dir, runs, summary })) }, null, 2));
 console.log(`\nraw numbers in ${file}`);

@@ -19,7 +19,14 @@ function unseenIn(all) {
   return all.slice(from).reverse().slice(0, AT_MOST);
 }
 
+const LATEST = typeof __WIKSTER_LATEST_RELEASE__ !== 'undefined' ? __WIKSTER_LATEST_RELEASE__ : null;
+
 export async function checkWhatsNew({ fresh = false } = {}) {
+  if (LATEST) {
+    const seen = seenId();
+    if (fresh || !seen) { try { localStorage.setItem(SEEN_KEY, LATEST); } catch {} return false; }
+    if (seen === LATEST) return false;
+  }
   const all = await releases();
   if (fresh || !seenId()) { markSeen(all); return false; }
   const list = unseenIn(all);

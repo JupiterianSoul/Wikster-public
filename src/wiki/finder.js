@@ -2,6 +2,9 @@ import { fetchJson } from './core.js';
 import { KNOWN_WIKIS, MATURE_WORDS } from '../data/wikis.js';
 import { matureCategories, matureSite, matureTopic } from './mature.js';
 import { adultCanon, adultQuery, minorsText, minorsWiki } from './safety.js';
+import { FINDER_VERSION, biggestIndex, findKey, foldName, formatPages, pageCount } from './names.js';
+
+export { FINDER_VERSION, biggestIndex, findKey, foldName, formatPages, pageCount };
 
 const STOP = new Set([
   'the', 'le', 'la', 'les', 'l', 'de', 'du', 'des', 'd', 'of', 'a', 'an', 'el', 'il', 'der', 'die', 'das',
@@ -15,7 +18,6 @@ export const MIN_ARTICLES = 40;
 export const KEEP_SCORE = 0.6;
 export const STRONG_SCORE = 0.8;
 export const EXACT_SCORE = 0.99;
-export const FINDER_VERSION = 2;
 
 const OFF_CANON_WORDS = /\b(fanon|fanfics?|fanfictions?|fan ?fictions?|fan ?made|fans?|fanpedia|fanmade|ideas?|role ?play\w*|rp|aus?|crossovers?|non ?canon|homebrew|rewritten|powerscaling|ocs?|creepypastas?)\b/;
 const OFF_CANON_SLUG = /fanon|fanfic|fanfiction|roleplay|homebrew|fanmade|crossover|noncanon|powerscal/;
@@ -29,14 +31,6 @@ export function offCanon(result, query = '') {
   try { slug = new URL(result?.apiUrl ?? '').hostname.split('.')[0]; } catch {}
   const hit = slug.replace(/[^a-z0-9]/g, '').match(OFF_CANON_SLUG);
   return Boolean(hit && !asked.replace(/\s/g, '').includes(hit[0]));
-}
-
-export function foldName(text) {
-  return String(text ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    .replace(/(\d)[,.\s](\d{3})\b/g, '$1$2')
-    .replace(/(\d+)k\b/g, (_, n) => `${n}000`)
-    .replace(/&/g, ' and ')
-    .replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 export const nameTokens = (text) => foldName(text).split(' ').filter((w) => w && !STOP.has(w));
@@ -355,11 +349,6 @@ export async function wikipediaHints(query, lang, get) {
   };
 }
 
-export const pageCount = (r) => {
-  const n = Number(r?.articles);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
-};
-
 export function rankResults(results, { lang = null, query = '', mature = false } = {}) {
   const kept = results.filter((r) => r.score >= KEEP_SCORE);
   const tier = (r) => (r.score >= EXACT_SCORE ? 0 : r.score >= STRONG_SCORE ? 1 : 2);
@@ -376,31 +365,6 @@ export function rankResults(results, { lang = null, query = '', mature = false }
   const rest = kept.filter((r) => r !== best).sort((a, b) => (a.topic ? 1 : 0) - (b.topic ? 1 : 0) || byCanon(a, b));
   return best ? [best, ...rest] : rest;
 }
-
-export function formatPages(n, lang = 'en') {
-  const count = Math.floor(Number(n));
-  if (!Number.isFinite(count) || count <= 0) return '?';
-  const short = (v, unit) => {
-    const text = v >= 10 ? String(Math.round(v)) : (Math.round(v * 10) / 10).toFixed(1).replace(/\.0$/, '');
-    return `${lang === 'fr' ? text.replace('.', ',') : text}${unit}`;
-  };
-  if (count >= 999_500) return short(count / 1_000_000, 'M');
-  if (count >= 1_000) return short(count / 1_000, 'k');
-  return String(count);
-}
-
-export function biggestIndex(results) {
-  let at = -1;
-  let most = 0;
-  (results ?? []).forEach((r, i) => {
-    if (r?.topic) return;
-    const n = pageCount(r);
-    if (n > most) { most = n; at = i; }
-  });
-  return at;
-}
-
-export const findKey = (query, lang) => `v${FINDER_VERSION}|${lang}|${foldName(query)}`;
 
 const memoryFinds = new Map();
 const MEMORY_FINDS = 60;

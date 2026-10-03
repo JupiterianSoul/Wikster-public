@@ -191,7 +191,9 @@ function storeFor(userId: string, box: { conf: unknown; reuse?: boolean } = { co
   let plan: { keys: string[]; pull: string | null; since: number | null } = { keys: [], pull: null, since: null };
   let pulled: { nonce: string; row: any } | null = null;
   let changed: { at: number; rows: any[]; gone: string[] } | null = null;
+  let totals: { cards: number; unique: number } | null = null;
   const fresh = new Map<string, any>();
+  const totalsOf = (v: any) => (v && Number.isFinite(Number(v.cards)) && Number.isFinite(Number(v.unique)) ? { cards: Number(v.cards), unique: Number(v.unique) } : null);
   const isUuid = (v: unknown) => /^[0-9a-f-]{36}$/i.test(String(v ?? ''));
   const shaped = (row: any) => ({
     wallet: { coins: Number(row?.wallet?.coins ?? 0), ink: Number(row?.wallet?.ink ?? 0) },
@@ -263,6 +265,7 @@ function storeFor(userId: string, box: { conf: unknown; reuse?: boolean } = { co
           if (!liveLoad || liveFresh) row = await rpc('econ_load', args);
           if (row?.live && typeof row.live === 'object') { box.conf = row.live; lastLive = row.live; liveAt = Date.now(); }
           memo = shaped(row);
+          totals = totalsOf(row?.totals);
           if (Array.isArray(row?.keys)) {
             fresh.clear();
             for (const k of row.keys) fresh.set(k, null);
@@ -279,7 +282,11 @@ function storeFor(userId: string, box: { conf: unknown; reuse?: boolean } = { co
         }
       }
       memo = await legacyLoad();
+      totals = null;
       return copy(memo);
+    },
+    totals() {
+      return totals;
     },
     async cards(keys: string[] | null) {
       if (keys != null && keys.length && keys.every((k) => fresh.has(k))) return keys.map((k) => fresh.get(k)).filter(Boolean);
@@ -347,8 +354,10 @@ function storeFor(userId: string, box: { conf: unknown; reuse?: boolean } = { co
         done = await rpc('econ_apply', { p_user: userId, p_ops: ops });
       } catch (error) {
         memo = null;
+        totals = null;
         throw error;
       }
+      totals = totalsOf(done?.totals);
       if (done?.fresh && memo) {
         memo = { ...memo, wallet: { coins: Number(done.coins ?? 0), ink: Number(done.ink ?? 0) }, state: done.fresh.state ?? {}, inventory: done.fresh.inventory ?? {} };
         const asked = Array.isArray(ops?.keys) ? ops.keys : [];
@@ -540,6 +549,8 @@ Deno.serve(async (req: Request) => {
     const result = await liveBox.run(box, () => language.run(lang, () => runWith(ctx, String(body.action ?? ''), body.args ?? {}, { ready })));
     if (DRAW_ACTIONS.has(String(body.action))) console.info(`economy ${body.action} in ${Date.now() - began} ms`);
     if (body.action === 'import' && result?.launch && typeof result.launch === 'object' && box.conf) result.launch.live = publicLive(box.conf);
+    const held = ctx.store.totals?.();
+    if (held && result && typeof result === 'object' && !Array.isArray(result)) result.totals = held;
     return json(watched ? deltaReply(result, watched.first(), sv) : result);
   } catch (error) {
     if (error instanceof EconError) {

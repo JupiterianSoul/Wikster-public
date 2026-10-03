@@ -1,7 +1,7 @@
 import * as store from '../collection.js';
 import { noteIn } from '../ledger.js';
 import { quietly, touch } from '../save.js';
-import { DEFAULT_FRAME_STYLE } from '../frames.js';
+import { DEFAULT_FRAME_STYLE } from '../framemeta.js';
 import { buckSvg, iconSvg, inkSvg } from '../data/icons.js';
 import { loadInk } from '../ink.js';
 import { formatAmount, popularityFromViews } from '../pricing.js';
@@ -13,7 +13,7 @@ import { backdrop } from '../ui/backdrop.js';
 import { emit } from '../ui/bus.js';
 import { synth } from '../ui/sound.js';
 import { getLanguage, t } from '../i18n.js';
-import { fetchViewsFor, refreshTitleCard, translateCard } from '../wiki.js';
+import { fetchViewsFor, refreshTitleCard, translateCard } from '../wiki/lazy.js';
 import { codeById, codeCardFor, codeLook, useCodeSource } from '../codedefs.js';
 import * as account from '../account.js';
 import { goToLatest } from '../version.js';
@@ -25,8 +25,8 @@ import { showGate, userId, takeMerge } from './gate.js';
 import { paintPanel } from './panel.js';
 import { live } from './live.js';
 import { tickTimed } from './packs.js';
-import { holdWakeLock, releaseWakeLock } from './settings.js';
-import { tickRestock } from './shop.js';
+import { holdWakeLock, releaseWakeLock } from './prefs.js';
+import { tickRestock } from './stipend.js';
 import { closeChatWire } from './social.js';
 
 export const RIP_COMMIT = 0.62;
@@ -207,7 +207,18 @@ export function compactCount(n) {
 
 export const TOAST_MARKS = { ok: 'check', error: 'close', bought: 'gem', info: 'bell' };
 
+let toastGate = null;
+
+export function useToastGate(fn) {
+  toastGate = typeof fn === 'function' ? fn : null;
+}
+
 export function toast(markup, kind = 'ok') {
+  if (kind === 'error' && toastGate) {
+    let pass = true;
+    try { pass = toastGate(markup) !== false; } catch { pass = true; }
+    if (!pass) return;
+  }
   const node = el.toast;
   if (!node.dataset.bound) {
     node.dataset.bound = '1';

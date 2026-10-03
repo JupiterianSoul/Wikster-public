@@ -3531,3 +3531,5 @@ html[data-lowpower='1'] .frame-overlay .fr-layer { animation: none !important; }
 html[data-lowpower='1'] .album-cover-medal[data-tier='complete'], html[data-lowpower='1'] .pca-medal[data-tier='complete'] { animation: none; }
 #screen-open.is-batch .open-nav { display: none; }
 #screen-open.is-batch .summary { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+#screen-friends.is-guest :is(.people, .section-head, .empty, .schema-note, .find, .find-status) { display: none !important; }
+#screen-friends.is-guest #friends-gate { min-height: 60vh; align-content: center; }

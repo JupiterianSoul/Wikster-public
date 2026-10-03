@@ -389,5 +389,13 @@ export function createEconDb() {
     async customDrop(customId) { user(id).custom.delete(customId); }
   });
 
+  db.totals = (id) => {
+    const u = users.get(id);
+    if (!u || db.noTotals) return null;
+    let cards = 0;
+    for (const row of u.cards.values()) cards += Number(row.copies) || 0;
+    return { cards, unique: u.cards.size };
+  };
+
   return db;
 }

@@ -1,5 +1,6 @@
 import { startTour } from './tour.js';
 import { initBack } from './back.js';
+import { registerShell, roomyConnection } from './worker.js';
 import { iconSvg, logoSvg } from '../data/icons.js';
 import { setBeforeUpdateReload, watchForUpdates } from './update.js';
 import { checkWhatsNew } from './whatsnew.js';
@@ -24,7 +25,7 @@ import { music } from '../ui/music.js';
 import { emit, on } from '../ui/bus.js';
 import { onSaveChanged, touch } from '../save.js';
 import * as wikdle from '../wikdle.js';
-import { drawArticles, fetchTopRead } from '../wiki.js';
+import { drawArticles, fetchTopRead } from '../wiki/lazy.js';
 import { generateShop } from '../shop.js';
 import * as odds from '../data/odds.js';
 import { addXp } from '../progression.js';
@@ -33,31 +34,32 @@ import { reportAlbums, earnSeasonPoints } from './arcade.js';
 import { applyPanelState, paintPanel, togglePanel } from './panel.js';
 import { openFilters, renderBinder, turnAlbumPage } from './binder.js';
 import { $, THEME_KEY, WIDE, applyStrings, bind, debug, el, esc, flushPlaytime, migrateLanguages, migrateSpecialCards, migrateViews, money, navTabFor, placeDrawerLinks, refreshWallet, refreshWornTheme, setTickerJob, showScreen, shuffle, state, storedTheme, syncTicker, toast, useTheme, wornScene } from './core.js';
-import { openDaily, openOdds, openWallet } from './daily.js';
 import * as leaderboard from '../leaderboard.js';
 import { flushGuildGoal, reportGuildGoal } from '../guildgoal.js';
 import { pointsForReport, seasonAt } from '../season.js';
 import { addInk, grant, onInk } from '../ink.js';
 import { bump, ledger } from '../ledger.js';
-import { publicSummary } from './statsboard.js';
 import { utcDayIndex } from '../days.js';
 import { tilt } from './detail.js';
 import { buildDrawer, closeDrawer, openDrawer, openHelp, openNotifications, paintDrawerLinks } from './drawer.js';
 import { landFromEmail } from './recovery.js';
 import { flushSync, gateAltAction, leaveAccount, onSession, purgeRetiredCodes, purgeRetiredThemes, resumeAccount, showGate, stopSocialPoll, submitGate, syncSoon, userId } from './gate.js';
 import { live } from './live.js';
-import { applyRarityVars, drainLevelUps, gainBooster, homeTabFor, initSwipe, paintOpenHint, showLevelUp, skipToSummary, warmDrawer } from './open.js';
-import { MIRRORED, econ, flushEconomy, onEconomySettled, serverEconomy, serverOwnedKeys, warmEconomy } from './econ.js';
+import { applyRarityVars, drainLevelUps, gainBooster, homeTabFor, initSwipe, paintOpenHint, showLevelUp, skipToSummary, warmDrawer, warmOpenFx } from './open.js';
+import { MIRRORED, econ, economyBusy, economyIdle, economySettling, flushEconomy, localTotals, onEconomySettled, serverEconomy, serverOwnedKeys, warmEconomy } from './econ.js';
 import { leaving } from '../account/client.js';
 import { isPc } from '../pc/mode.js';
 import { buildBooster, createCustomPack, onFinderInput, openAllTimed, paintPackCaption, renderPacks, renderTimed, showPacks, syncTimed } from './packs.js';
 import { pendingOpens, readyCount } from './ready.js';
 import { paintPlaytime, renderProfile } from './profile.js';
-import { refreshLevelBadge, updateBadges } from './regalia.js';
-import { applySettings, renderCustomize, sayWipeNote, wipeEverything } from './settings.js';
-import { payStipend, renderShop, shopIsBuilt, showShop } from './shop.js';
+import { loadHonours, refreshLevelBadge, updateBadges } from './regalia.js';
+import { applySettings } from './prefs.js';
+import { openDanger, sayDangerNote as sayWipeNote } from './danger.js';
+import { payStipend, renderShop, shopIsBuilt, showShop } from './stipend.js';
 import { chatTyped, keepChatBottom, loadFriends, openFriend, parkLiveSocial, renderFriends, runSearch, sendChat, settlePresence, socialAction, syncSocial, unparkLiveSocial } from './social.js';
 import { restoreLive, startLiveOps } from './liveops.js';
+
+quests.useClaimedSource((key) => (key !== 'local' && serverEconomy() ? { known: true, ...(state.profile?.questDay ?? {}) } : null));
 
 bind({
   screens: {
@@ -251,8 +253,22 @@ bind({
   flash: $('#flash'), toast: $('#toast'), xpPop: $('#xp-pop')
 });
 
+const pcShell = isPc ? import('../pc/index.js') : null;
+
 let starting = null;
 let starterSpecs = null;
+
+const fromDaily = (name) => (...args) => import('./daily.js').then((m) => m[name](...args));
+const openDaily = fromDaily('openDaily');
+const openOdds = fromDaily('openOdds');
+const openWallet = fromDaily('openWallet');
+
+const renderCustomize = () => import('./settings.js').then((m) => m.renderCustomize());
+
+const afterIntro = (fn) => {
+  if (document.getElementById('intro')) addEventListener('wikster:start', () => fn(), { once: true });
+  else fn();
+};
 
 const whenIdle = (fn, wait) => {
   if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: wait });
@@ -363,11 +379,6 @@ export function regradeCollection() {
   return changed;
 }
 
-export function registerShell() {
-  if (!('serviceWorker' in navigator) || import.meta.env.DEV) return;
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
-}
-
 export function init() {
   restoreLive();
   onEconomySettled(() => {
@@ -419,6 +430,8 @@ export function init() {
   checkNotices();
   setTimeout(registerShell, 3000);
   setTimeout(warmDrawer, 2500);
+  setTimeout(warmOpenFx, 4000);
+  afterIntro(() => setTimeout(() => loadHonours().then(() => { updateBadges(); paintDrawerLinks(); }).catch(() => {}), roomyConnection() ? 3000 : 15000));
   sayWipeNote();
   el.wikdleBack.addEventListener('click', () => { synth.playTap(); showScreen('games'); });
   el.panelToggle.addEventListener('click', togglePanel);
@@ -478,7 +491,7 @@ export function init() {
   if (isPc) renderShop();
   else {
     on('screen', (name) => { if (name === 'shop' && !shopIsBuilt()) renderShop(); });
-    whenIdle(() => { if (!shopIsBuilt()) renderShop(); }, 1500);
+    if (roomyConnection()) afterIntro(() => whenIdle(() => { if (!shopIsBuilt()) renderShop(); }, 1500));
   }
   renderBinder();
 
@@ -652,7 +665,7 @@ export function init() {
 
   if (document.getElementById('intro')) addEventListener('wikster:start', () => backdrop.start(), { once: true });
   else backdrop.start();
-  if (isPc) import('../pc/index.js').then((m) => m.startPc()).catch((error) => console.error('pc shell', error));
+  pcShell?.then((m) => m.startPc()).catch((error) => console.error('pc shell', error));
   startSession();
 }
 
@@ -717,10 +730,16 @@ onInk((kind, n) => { bump(state.profile, kind === 'earn' ? 'inkEarned' : 'inkSpe
   const day = utcDayIndex();
   if (ledger(state.profile).lastPlayDay !== day) { ledger(state.profile).lastPlayDay = day; bump(state.profile, 'playDays'); store.saveProfile(state.profile); }
 }
-loadLanguage().then(init);
+const styled = () => new Promise((done) => {
+  if (!document.getElementById('wikster-css') || document.documentElement.classList.contains('is-styled')) { done(); return; }
+  addEventListener('wikster:styled', () => done(), { once: true });
+});
+
+Promise.all([loadLanguage(), styled()]).then(init);
 
 window.__wikster = {
   state, store, debug, RARITIES, synth, music, backdrop, THEMES, THEME_PACKS, regrade: regradeCollection, serverEconomy, econ,
+  economyIdle, economyBusy, economySettling, localTotals,
   levelUp: showLevelUp, wikdle,
   draw: drawArticles, generateShop, syncSocial, drawCaps: drawCapsFor, drawPack: toDrawPack, odds, specId,
   topRead: fetchTopRead, todayRarity: todayRarityForRank,
@@ -730,7 +749,7 @@ window.__wikster = {
   guildGoal: (metric, detail) => { reportGuildGoal(metric, detail); return flushGuildGoal(); },
   season: (metric, detail) => earnSeasonPoints(pointsForReport(metric, detail)),
   seasonAt,
-  setTheme: (id) => { useTheme(id); renderPacks(); renderShop(); renderBinder(); renderCustomize(); },
+  setTheme: (id) => { useTheme(id); renderPacks(); renderShop(); renderBinder(); if (state.tab === 'customize') renderCustomize(); },
   debugRarity(id) {
     const forced = rarityById(id);
     document.querySelectorAll('.card').forEach((card) => {
@@ -755,6 +774,6 @@ window.__wikster = {
   },
   timedTopTier,
   boosters: { readyCount, pending: () => pendingOpens().length, openAllTimed },
-  resetAll: wipeEverything,
-  statsSummary: () => publicSummary()
+  resetAll: () => openDanger('all'),
+  statsSummary: () => import('./statsboard.js').then((m) => m.publicSummary())
 };

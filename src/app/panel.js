@@ -16,7 +16,6 @@ import { atMaxLevel, levelFraction, levelOf, rankFor, xpToNext } from '../progre
 import { fill, h } from '../ui/dom.js';
 import { activeFilterCount, openFilters } from './binder.js';
 import { WIDE, el, money, showScreen, state } from './core.js';
-import { openDaily, openOdds } from './daily.js';
 import { openNotifications, unreadCount } from './drawer.js';
 import { userId } from './gate.js';
 import { recall } from './memo.js';
@@ -93,7 +92,7 @@ function todayBlock() {
         : t('panelXp', { have: (Number(progress.xp) || 0).toLocaleString(), need: xpToNext(progress).toLocaleString() }))
     ]),
     line('gift', gift ? t('panelGiftReady') : clockText('gift'),
-      gift ? action(t('dailyClaim'), () => openDaily()) : null, gift ? null : 'gift'),
+      gift ? action(t('dailyClaim'), () => import('./daily.js').then((m) => m.openDaily())) : null, gift ? null : 'gift'),
     line('scroll', t('panelQuests', { done, n: board.quests.length }),
       claimable ? action(t('panelClaim', { n: claimable }), () => showScreen('quests')) : null),
     line('bell', unread ? t('panelUnread', { n: unread }) : t('panelNoUnread'),
@@ -107,7 +106,7 @@ function screenBlock(tab) {
       line('gem', t('shopPurse'), h('b.panel-money', { html: money(state.wallet) })),
       line('hourglass', clockText('restock'), null, 'restock'),
       line('clock', clockText('free'), null, 'free'),
-      action(t('pullRates'), () => openOdds())
+      action(t('pullRates'), () => import('./daily.js').then((m) => m.openOdds()))
     ]);
   }
   if (tab === 'packs' || tab === 'timed') {

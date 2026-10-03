@@ -5,7 +5,7 @@ import { h } from '../ui/dom.js';
 import { Bar } from '../ui/components.js';
 import { computeStats, dayOf, fromSummary, SPARK_WEEKS, toSummary, weekStartOf } from '../profilestats.js';
 import { evaluate as evaluateAchievements } from '../achievements.js';
-import { achFacts } from './regalia.js';
+import { achFacts } from './honours.js';
 import { buildAlbums } from '../albums.js';
 import { loadStats as loadWikdleStats } from '../wikdle.js';
 import { saveWrites } from '../save.js';

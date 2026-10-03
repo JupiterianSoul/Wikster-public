@@ -1,5 +1,6 @@
 import { SHOWCASE_MAX } from '../showcase.js';
 import { USERNAME_RE, supabase } from './client.js';
+import { announceMessage } from './feeds.js';
 import { live } from './live.js';
 import { isSchemaGap, readProfiles, readSocialTable, writeSocial } from './schema.js';
 
@@ -244,8 +245,10 @@ export async function sendChatMessage(selfId, otherId, body) {
   if (!text) return null;
   return writeSocial(async () => {
     const { data, error } = await supabase.from('messages')
-      .insert({ sender: selfId, recipient: otherId, body: text }).select().single();
+      .insert({ sender: selfId, recipient: otherId, body: text }).select().single()
+      .setHeader('x-wikster-chat', 'inbox');
     if (error) throw error;
+    announceMessage(data).catch(() => {});
     return data;
   });
 }

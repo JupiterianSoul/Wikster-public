@@ -2,7 +2,7 @@ import { t } from '../i18n.js';
 import { MUSIC, SOFTWARE, WIKIPEDIA_LICENCE, cardCredit } from '../credits.js';
 import { BUILD, SITE_URL } from '../version.js';
 import { openSheet } from './core.js';
-import { settingsRowButton, settingsRowShell } from './settings.js';
+import { settingsRowButton, settingsRowShell } from './prefs.js';
 
 const link = (href, text) => {
   const a = document.createElement('a');

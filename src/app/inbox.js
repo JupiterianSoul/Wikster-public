@@ -172,7 +172,7 @@ export async function openTarget(tag) {
     return true;
   }
   if (kind === 'trade' || kind === 'trades') {
-    social.renderFriends();
+    await social.renderFriends();
     showScreen('friends');
     let trade = (state.social.trades ?? []).find((tr) => tr.id === ref);
     if (ref && (!trade || !trade.offer)) {
@@ -184,7 +184,7 @@ export async function openTarget(tag) {
     return Boolean(trade);
   }
   if (kind === 'request' || kind === 'friends') {
-    social.renderFriends();
+    await social.renderFriends();
     showScreen('friends');
     if (kind === 'request') {
       if (ref && !state.social.incoming.some((e) => e.id === ref)) await social.loadFriends();
