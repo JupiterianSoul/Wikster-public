@@ -241,6 +241,14 @@ await p.waitForFunction(() => document.querySelector('#screen-open').classList.c
 await p.waitForTimeout(400);
 check('then the pack is done, cards still on the table', await p.evaluate(() => document.querySelector('#screen-open').classList.contains('phase-summary')) && await p.locator('#card-stack .stack-card').first().isVisible());
 check('with a button to open another of the same', await p.locator('.pc-open-again').isVisible());
+await p.waitForTimeout(500);
+let leveled = false;
+for (let i = 0; i < 6 && await p.locator('#sheet.is-locked.is-open').count(); i++) {
+  leveled = true;
+  await p.keyboard.press('Enter');
+  await p.waitForTimeout(500);
+}
+if (leveled) check('a level up on the way is claimed with Enter, no mouse needed', await p.locator('#sheet.is-locked.is-open').count() === 0);
 await p.keyboard.press('Space');
 await p.waitForTimeout(900);
 check('Space opens the next one straight away', await p.evaluate(() => document.querySelector('#screen-open').classList.contains('phase-idle')));

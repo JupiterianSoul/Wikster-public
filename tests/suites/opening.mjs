@@ -313,6 +313,59 @@ for (const pc of [false, true]) {
   await ctx.close();
 }
 
+section('a draw still on its way keeps the equipped opening in suspense');
+{
+  const { ctx, p } = await open({ count: 2, opening: 'vortex' });
+  let gate = null;
+  await p.route(/wikipedia\.org|wikidata\.org|wikimedia\.org\/api/, async (r) => {
+    if (gate) await Promise.race([gate.promise, new Promise((res) => setTimeout(res, 6000))]);
+    r.fallback();
+  });
+  await toShelf(p);
+  await p.locator('#packs-open').click();
+  await idle(p);
+  let release = null;
+  gate = { promise: new Promise((res) => { release = res; }) };
+  await p.evaluate(() => document.querySelector('#screen-open .rip-zone').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await reveal(p);
+  await p.locator('#open-skip').click();
+  await p.waitForFunction(() => document.querySelector('#screen-open').classList.contains('phase-summary'), null, { timeout: 8000 });
+  await closeSheets(p);
+  await p.locator('#open-done').click();
+  await p.waitForTimeout(300);
+  await p.locator('#packs-open').click();
+  await idle(p);
+  await p.evaluate(() => {
+    window.__hold = { roots: 0, brew: false, gapFrames: 0, frames: 0, revealAt: null };
+    new MutationObserver((list) => { for (const m of list) for (const n of m.addedNodes) if (n.classList?.contains('ofx-root')) window.__hold.roots++; }).observe(document.body, { childList: true });
+    const tick = () => {
+      const scr = document.querySelector('#screen-open');
+      if (scr.classList.contains('phase-opening')) {
+        window.__hold.frames++;
+        if (document.querySelector('.open-brew')) window.__hold.brew = true;
+        if (!document.querySelector('.ofx-root')) window.__hold.gapFrames++;
+      }
+      if (scr.classList.contains('phase-reveal') && window.__hold.revealAt == null) window.__hold.revealAt = performance.now();
+      if (window.__hold.revealAt == null) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await p.evaluate(() => document.querySelector('#screen-open .rip-zone').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await p.waitForTimeout(3500);
+  const held = await p.evaluate(() => ({ opening: document.querySelector('#screen-open').classList.contains('phase-opening'), fx: Boolean(document.querySelector('.ofx-root')) }));
+  const freed = await p.evaluate(() => performance.now());
+  release();
+  gate = null;
+  await reveal(p);
+  const h = await p.evaluate(() => window.__hold);
+  check('while the draw is on its way, the equipped opening keeps going', held.opening && held.fx, JSON.stringify(held));
+  check('it plays once, with no other waiting animation on top', h.roots === 1 && !h.brew, JSON.stringify(h));
+  check('the opening never leaves an empty frame while waiting', h.gapFrames <= 2, JSON.stringify(h));
+  check('once the draw lands it bursts straight into the reveal', h.revealAt != null && h.revealAt - freed < 4000, `${Math.round(h.revealAt - freed)} ms`);
+  check('and the five cards are there', await p.locator('#card-stack .stack-card').count() === 5 && await p.evaluate(() => !document.querySelector('#open-hint.is-error')));
+  await ctx.close();
+}
+
 section('the results of a big open all can be scrolled to the last card');
 const BIG_ID = 'theme|animals|std|5';
 const lastReachable = (p, sel) => p.evaluate((sel) => {
