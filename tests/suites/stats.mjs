@@ -101,7 +101,14 @@ check('the Legendary guarantee', /^In 9 boosters Legendary guarantee 31 of 40/.t
 check('opened by kind', (await page.locator('#stat-grid .stat-chip').evaluateAll((n) => n.map((c) => c.dataset.kind))).join() === 'theme,open,timed');
 check('boosters per week', await page.locator('#stat-grid [data-chart="boosters"] .stat-spark-bar').count() === 12);
 check('the since line says when counting started', /counted from/.test(await page.locator('#stat-grid [data-sec="boosters"] .stat-foot').innerText()));
-check('the economy is private', /Only you/.test(await page.locator('#stat-grid [data-sec="economy"] .stat-sec-note').innerText()));
+check('no section is marked private', await page.locator('#stat-grid .stat-sec-note').count() === 0);
+const summary = await page.evaluate(() => window.__wikster.statsSummary());
+const summaryText = JSON.stringify(summary);
+check('the public summary is small and carries no card names', summaryText.length < 1500 && !/Alpha|Omega|en:/.test(summaryText), summaryText);
+check('it holds what the board shows', summary.cC === 7 && summary.bN === 37 && summary.eSp === 8400 && summary.aSt === 11 && summary.gQp === 6 && summary.bR === 5, summaryText);
+await page.evaluate(() => { window.__wikster.state.profile.settings.publicStats = false; });
+check('turned off in Settings, it says only that it is hidden', JSON.stringify(await page.evaluate(() => window.__wikster.statsSummary())).length < 40);
+await page.evaluate(() => { window.__wikster.state.profile.settings.publicStats = true; });
 check('wallet and Ink', /^4,321 Buckarooz/.test(await tileText(page, 'coins')) && /^87 Ink/.test(await tileText(page, 'ink')));
 check('spent in the Shop', /^8,400 Spent in the Shop 12 purchases/.test(await tileText(page, 'spent')), await tileText(page, 'spent'));
 check('earned from sales', /^1,530 Earned from sales 21 cards sold/.test(await tileText(page, 'sales')));

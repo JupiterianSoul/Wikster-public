@@ -98,4 +98,35 @@ const broken = { ...profile, daily: { ...profile.daily, lastDay: Math.floor(NOW 
 check('a broken streak shows zero but keeps the best', computeStats({ profile: broken, entries: [], albums: [], facts: {}, now: NOW }).activity.streak === 0
   && computeStats({ profile: broken, entries: [], albums: [], facts: {}, now: NOW }).activity.bestStreak === 12);
 
+const { toSummary, fromSummary, cleanSummary, SUMMARY_NUMBERS, SUMMARY_LISTS } = await import('../../src/profilestats.js');
+const { readFileSync } = await import('node:fs');
+const summary = toSummary(s, { now: NOW });
+const sent = JSON.stringify(summary);
+check('the public summary is small', sent.length < 1500, String(sent.length));
+check('it carries no card key or title', !/Alpha|Title|"k\d|en:/.test(sent), sent);
+check('cleaning a clean summary changes nothing', JSON.stringify(cleanSummary(summary)) === sent);
+const back = fromSummary(summary, { cards: 8, unique_cards: 5, collection_value: 999, boosters_opened: 12, play_ms: 3 * 3600000, created_at: new Date(T0).toISOString() }, NOW);
+check('a viewer reads the same collection', back.collection.unique === 5 && back.collection.value === 999 && back.collection.byPrint.legendary === 2 && back.collection.best.rarityId === 'legendary' && back.collection.families.find((f) => f.id === 'theme').knownOwned === 2);
+check('the same boosters', back.boosters.opened === 12 && back.boosters.cards === 43 && back.boosters.legendaryPlus === 3 && back.boosters.today === 1 && Math.round(back.boosters.average) === 267
+  && back.boosters.luck.value === 700 && back.boosters.top.rarityId === 'mythic' && back.boosters.pity.left === 10 && JSON.stringify(back.boosters.kinds) === JSON.stringify(b.kinds), JSON.stringify(back.boosters));
+check('the same economy, activity, games and social', back.economy.spent === 4200 && back.economy.sellEarned === 650 && back.activity.streak === 9 && back.activity.bestRank === 37
+  && back.activity.achDone === 9 && back.games.quizPlayed === 4 && back.social.messages === 11 && back.social.showcaseMax === 5);
+check('the week charts line up', JSON.stringify(back.collection.newPerWeek) === JSON.stringify(c.newPerWeek) && JSON.stringify(back.boosters.perWeek) === JSON.stringify(b.perWeek));
+const later = fromSummary(summary, {}, NOW + 14 * DAY_MS);
+check('read two weeks later, today and this week are zero and the charts slide', later.boosters.today === 0 && later.boosters.week === 0 && later.activity.streak === 0
+  && JSON.stringify(later.collection.newPerWeek.slice(0, 10)) === JSON.stringify(c.newPerWeek.slice(2)));
+check('a hidden summary shows nothing', fromSummary(toSummary(s, { now: NOW, hidden: true }), {}, NOW) === null && JSON.stringify(toSummary(null, { now: NOW, hidden: true })).length < 40);
+const junk = cleanSummary({ cC: -5, cU: 'x', cV: 1e40, cB: 99, zz: 1, cPr: [1, 2, 'a'], cNw: new Array(40).fill(1), bK: [0, 3], title: 'Alpha' });
+check('junk is cleaned: no negatives, no strings, caps held, unknown keys dropped', junk.cC === 0 && !('cU' in junk) && junk.cV === 1e13 && junk.cB === 7 && !('zz' in junk) && !('cPr' in junk) && !('cNw' in junk) && JSON.stringify(junk.bK) === '[0,3]' && !('title' in junk), JSON.stringify(junk));
+check('a summary without its row falls back to its own numbers', fromSummary(summary, {}, NOW).collection.copies === 8);
+
+const sql = readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8');
+const body = sql.slice(sql.indexOf('create or replace function public.stats_clean'));
+const nums = [...body.slice(body.indexOf('v_nums'), body.indexOf('v_caps')).matchAll(/'([A-Za-z]+)'/g)].map((m) => m[1]);
+check('the server cleans the same numbers', JSON.stringify([...nums].sort()) === JSON.stringify(Object.keys(SUMMARY_NUMBERS).sort()), nums.join(' '));
+const caps = JSON.parse(body.match(/v_caps constant jsonb := '([^']+)'/)[1]);
+check('with the same caps', Object.entries(caps).every(([k, v]) => SUMMARY_NUMBERS[k] === v) && Object.entries(SUMMARY_NUMBERS).every(([k, v]) => v === 1e13 || caps[k] === v));
+const lists = JSON.parse(body.match(/v_lists constant jsonb := '([^']+)'/)[1]);
+check('and the same lists', JSON.stringify(lists) === JSON.stringify(SUMMARY_LISTS), JSON.stringify(lists));
+
 done();

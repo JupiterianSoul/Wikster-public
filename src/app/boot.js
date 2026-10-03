@@ -39,6 +39,7 @@ import { flushGuildGoal, reportGuildGoal } from '../guildgoal.js';
 import { pointsForReport, seasonAt } from '../season.js';
 import { addInk, grant, onInk } from '../ink.js';
 import { bump, ledger } from '../ledger.js';
+import { publicSummary } from './statsboard.js';
 import { utcDayIndex } from '../days.js';
 import { tilt } from './detail.js';
 import { buildDrawer, closeDrawer, openDrawer, openHelp, openNotifications, paintDrawerLinks } from './drawer.js';
@@ -754,5 +755,6 @@ window.__wikster = {
   },
   timedTopTier,
   boosters: { readyCount, pending: () => pendingOpens().length, openAllTimed },
-  resetAll: wipeEverything
+  resetAll: wipeEverything,
+  statsSummary: () => publicSummary()
 };

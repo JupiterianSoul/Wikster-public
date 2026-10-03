@@ -22,7 +22,7 @@ import { WIPE_EVERY_DAYS, starterCoins } from '../economy.js';
 import { entryToRow, pullEntry, rowToEntry } from './cards.js';
 import { ECON_KEYS, clone, commit, dayBefore, fail, invOp, utcDay } from './core.js';
 import { dayBeforeDay } from '../days.js';
-import { addXp } from '../progression.js';
+import { addXp, cleanPending, normalizeProgress } from '../progression.js';
 import { track } from './track.js';
 
 export const VERSUS_PAID_PER_DAY = 10;
@@ -453,7 +453,7 @@ export const REWARD_ACTIONS = {
           const progress = stateOf('progress') ?? { level: 1, xp: 0 };
           state.progress = progress;
           const gained = addXp(progress, amount);
-          if (gained.length) state.pendingLevels = [...(stateOf('pendingLevels') ?? []), ...gained];
+          if (gained.length) state.pendingLevels = cleanPending([...(stateOf('pendingLevels') ?? []), ...gained]);
           break;
         }
         case 'profile': {
@@ -488,6 +488,8 @@ export const REWARD_ACTIONS = {
         failed.push(row.id);
       }
     }
+    if (state.progress && typeof state.progress === 'object') normalizeProgress(state.progress);
+    else if ('progress' in state && state.progress != null) state.progress = normalizeProgress({});
     const local = rows.filter((r) => left.includes(r.id));
     if (!marks.length) return { ...(await commit(ctx, loaded, {})), landed: [], left, local, failed };
     for (const k of Object.keys(state)) if (state[k] === undefined) delete state[k];

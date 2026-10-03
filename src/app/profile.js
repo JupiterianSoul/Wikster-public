@@ -1,6 +1,6 @@
 import { SHOWCASE_MAX } from '../showcase.js';
 import { withSpecialPhoto } from '../codedefs.js';
-import { MAX_LEVEL, levelFraction, rankFor, rewardForLevel, xpForLevel } from '../progression.js';
+import { atMaxLevel, levelFraction, levelOf, rankFor, rewardForLevel, xpToNext } from '../progression.js';
 import { paintRingFace } from './social.js';
 import { frameTier } from '../frames.js';
 import { t, tx } from '../i18n.js';
@@ -38,20 +38,21 @@ export function paintPlaytime() {
 
 export function renderProfile() {
   const { progress, rarityCounts } = state.profile;
-  const level = progress.level ?? 1;
+  const level = levelOf(progress);
   const rank = rankFor(level);
-  const atMax = level >= MAX_LEVEL;
+  const atMax = atMaxLevel(progress);
 
   wearLook(el.screens.profile, ownAppearance());
   el.profileTitle.textContent = t('profileTitle');
   live.profileRing.set(levelFraction(progress), String(level));
+  el.profileRing.classList.toggle('is-max', atMax);
   paintFrameInto(el.profileRing, frameStyle(), frameTier(level));
   paintRingFace(el.profileRing, state.account?.profile);
   el.profileLevel.textContent = atMax ? t('profileMax') : t('profileLevel', { n: level });
   el.profileRank.textContent = tx(rank.name);
   live.xpBar.set(levelFraction(progress));
-  el.xpLine.textContent = atMax ? t('profileMax') : t('profileXpLine', {
-    have: (progress.xp ?? 0).toLocaleString(), need: xpForLevel(level).toLocaleString()
+  el.xpLine.textContent = atMax ? t('levelMaxNote', { n: level }) : t('profileXpLine', {
+    have: (Number(progress.xp) || 0).toLocaleString(), need: xpToNext(progress).toLocaleString()
   });
 
   el.nextRewardLabel.textContent = t('profileNextReward');

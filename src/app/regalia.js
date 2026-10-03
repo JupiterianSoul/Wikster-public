@@ -3,7 +3,7 @@ import { noteIn } from '../ledger.js';
 import { seasonUnlocks } from '../season.js';
 import * as store from '../collection.js';
 import * as account from '../account.js';
-import { levelFraction } from '../progression.js';
+import { atMaxLevel, levelFraction, levelOf } from '../progression.js';
 import { t } from '../i18n.js';
 import { evaluate as evaluateAchievements, measure as measureAchievements, redeemableCount } from '../achievements.js';
 import { badgeStates, badgeSvg, romanRank } from '../badges.js';
@@ -50,7 +50,7 @@ export function paintFrameInto(node, styleId, tier) {
 
 export function frameStage(styleId, { size = 56, width = 4 } = {}) {
   const progress = state.profile.progress ?? {};
-  const level = progress.level ?? 1;
+  const level = levelOf(progress);
   const node = document.createElement('span');
   node.className = 'frame-stage';
   node.setAttribute('aria-hidden', 'true');
@@ -82,9 +82,12 @@ export function refreshLevelBadge() {
 }
 
 function paintLevelBadge() {
-  const level = state.profile.progress.level ?? 1;
-  live.levelRing.set(levelFraction(state.profile.progress), String(level));
-  el.levelBadge.setAttribute('aria-label', `${t('profileLevel', { n: level })}`);
+  const progress = state.profile.progress;
+  const level = levelOf(progress);
+  const atMax = atMaxLevel(progress);
+  live.levelRing.set(levelFraction(progress), String(level));
+  el.levelBadge.classList.toggle('is-max', atMax);
+  el.levelBadge.setAttribute('aria-label', atMax ? t('levelMaxNote', { n: level }) : t('profileLevel', { n: level }));
   paintFrameInto(el.levelBadge, frameStyle(), frameTier(level));
 }
 

@@ -14,7 +14,7 @@ import { buildCardBack, lookScrap } from '../packview.js';
 import { DEFAULT_FX } from '../data/fx.js';
 import { isMature } from '../sensitive.js';
 import { iconSvg } from '../data/icons.js';
-import { addXp, rankFor, rewardForLevel, xpForCard } from '../progression.js';
+import { addXp, cleanPending, rankFor, rewardForLevel, xpForCard } from '../progression.js';
 import { reportAlbums, reportQuest, seasonReached } from './arcade.js';
 import { renderBinder } from './binder.js';
 import { DRAW_HARD_LIMIT, EMERGE_DURATION, EMERGE_STAGGER, LAST_CARD_HOLD, PREFETCH_DELAY, RIP_COMMIT, RIP_DIR_KEY, RIP_LOCK_SLOP, RIP_TICK_STEP, SWIPE_COMMIT, TILT_REACH, clamp, clamp01, debug, el, esc, ink, money, openSheet, refreshWallet, settings, showScreen, shuffle, state, toast, wait } from './core.js';
@@ -2016,7 +2016,9 @@ function popXp(amount) {
 }
 
 export function drainLevelUps() {
-  const level = state.profile.pendingLevels[0];
+  const pending = cleanPending(state.profile.pendingLevels);
+  if (pending.length !== (state.profile.pendingLevels ?? []).length) state.profile.pendingLevels = pending;
+  const level = pending[0];
   if (level == null) return false;
   if (hushing()) { afterReveal(() => { drainLevelUps(); }, 'levelup'); return true; }
   showLevelUp(level);

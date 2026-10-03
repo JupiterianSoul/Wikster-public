@@ -16,7 +16,7 @@ import { cardAllowed, minorsText, minorsWiki } from '../wiki/safety.js';
 import { seasonAt, seasonSpec } from '../season.js';
 import { SPECIAL_RARITY_ID, cleanCodeDef, codeDefsOf, learnCodeDefs, missingCodeDefs } from '../codedefs.js';
 import { isFriendSpec } from '../friendcodes.js';
-import { addXp, rewardForLevel, xpForCard } from '../progression.js';
+import { MAX_LEVEL, addXp, cleanPending, rewardForLevel, xpForCard } from '../progression.js';
 import { claim as claimDaily, emptyDaily, normalizeDaily } from '../daily.js';
 import { accrue, emptyTimed, maxHeld, timedLevel, timedSpec } from '../timed.js';
 import { CUSTOM_THEME_PRICE, INK_DAILY_WEEK, LOOK_PRICE, OPENING_PRICE, THEME_PRICE, exchangeCost, fxPrice, inkForAchievement, inkForLevel } from '../ink.js';
@@ -1043,7 +1043,7 @@ export const ACTIONS = {
     if (spec.kind !== 'code') {
       levels = addXp(progress, xp);
       state.progress = progress;
-      state.pendingLevels = [...(loaded.state.pendingLevels ?? []), ...levels];
+      state.pendingLevels = cleanPending([...(loaded.state.pendingLevels ?? []), ...levels]);
       state.boostersOpened = (Number(loaded.state.boostersOpened) || 0) + boosters;
       const counts = clone(loaded.state.rarityCounts ?? {});
       for (const c of cards) counts[c.rarityId] = (counts[c.rarityId] ?? 0) + 1;
@@ -1078,14 +1078,14 @@ export const ACTIONS = {
   async level(ctx, { level }) {
     const loaded = await ctx.store.load();
     const n = Math.floor(Number(level));
-    const pending = loaded.state.pendingLevels ?? [];
-    if (!pending.includes(n)) fail('NOT_EARNED');
+    const pending = Array.isArray(loaded.state.pendingLevels) ? loaded.state.pendingLevels : [];
+    if (!pending.includes(n) || n < 2 || n > MAX_LEVEL) fail('NOT_EARNED');
     const reward = rewardForLevel(n);
     return commit(ctx, loaded, {
       coins: reward.coins ?? 0,
       ink: inkForLevel(n),
       inventory: reward.spec ? [invOp(reward.spec, 1)] : [],
-      state: { pendingLevels: pending.filter((l) => l !== n) },
+      state: { pendingLevels: cleanPending(pending.filter((l) => l !== n)) },
       claims: [`level:${n}`],
       kind: 'level', detail: { level: n }
     }, { extra: { reward, ink: inkForLevel(n) } });

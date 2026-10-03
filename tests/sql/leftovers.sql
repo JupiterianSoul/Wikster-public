@@ -26,6 +26,9 @@ select t_is('a game the server does not score is ignored', not exists (select 1 
 
 select t_is('the profile counts the cards the server holds', (select cards = 3 and unique_cards = 3 and collection_value = 1210 from profiles where id = 'dddddddd-0000-0000-0000-000000000001'));
 select t_is('and takes level, boosters and best rarity from the server', (select level = 7 and boosters_opened = 3 and best_rarity = 'epic' from profiles where id = 'dddddddd-0000-0000-0000-000000000001'));
+select econ_apply('dddddddd-0000-0000-0000-000000000001', '{"state":{"progress":{"level":650,"xp":40}}}');
+select t_is('a level past the top shows as the top level', (select level = 500 from profiles where id = 'dddddddd-0000-0000-0000-000000000001'));
+select econ_apply('dddddddd-0000-0000-0000-000000000001', '{"state":{"progress":{"level":7,"xp":0}}}');
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', 'dddddddd-0000-0000-0000-000000000001', false);

@@ -62,10 +62,34 @@ function rewardBooster(level, grade) {
   };
 }
 
+export function clampLevel(value) {
+  const n = Math.floor(Number(value));
+  if (n === Infinity) return MAX_LEVEL;
+  return Number.isFinite(n) && n >= 1 ? Math.min(n, MAX_LEVEL) : 1;
+}
+
+export const levelOf = (progress) => clampLevel(progress?.level);
+
+export const atMaxLevel = (progress) => levelOf(progress) >= MAX_LEVEL;
+
+export function cleanPending(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((n) => Number.isInteger(n) && n >= 2 && n <= MAX_LEVEL);
+}
+
+export function normalizeProgress(progress) {
+  const level = levelOf(progress);
+  const xp = Math.floor(Number(progress.xp));
+  progress.level = level;
+  progress.xp = level >= MAX_LEVEL || !Number.isFinite(xp) || xp < 0 ? 0 : xp;
+  return progress;
+}
+
 export function addXp(progress, amount) {
   const gained = [];
-  progress.xp = (progress.xp ?? 0) + Math.max(0, Math.round(amount));
-  progress.level = progress.level ?? 1;
+  normalizeProgress(progress);
+  const add = Math.round(Number(amount));
+  if (Number.isFinite(add) && add > 0 && progress.level < MAX_LEVEL) progress.xp += add;
 
   while (progress.level < MAX_LEVEL && progress.xp >= xpForLevel(progress.level)) {
     progress.xp -= xpForLevel(progress.level);
@@ -76,9 +100,14 @@ export function addXp(progress, amount) {
   return gained;
 }
 
+export function xpToNext(progress) {
+  return atMaxLevel(progress) ? null : xpForLevel(levelOf(progress));
+}
+
 export function levelFraction(progress) {
-  const level = progress.level ?? 1;
+  const level = levelOf(progress);
   if (level >= MAX_LEVEL) return 1;
   const need = xpForLevel(level);
-  return need > 0 ? Math.min(1, (progress.xp ?? 0) / need) : 0;
+  const xp = Number(progress?.xp);
+  return need > 0 && Number.isFinite(xp) ? Math.min(1, Math.max(0, xp / need)) : 0;
 }

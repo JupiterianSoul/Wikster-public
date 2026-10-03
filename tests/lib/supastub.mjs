@@ -339,6 +339,7 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
         if (typeof stats.rank === 'string') next.rank = stats.rank.slice(0, 60);
         if (stats.badges && typeof stats.badges === 'object' && !Array.isArray(stats.badges)) next.badges = cleanFriendBadges(stats.badges, econHeld(me)?.state ?? {});
         if (Array.isArray(stats.showcase)) next.showcase = stats.showcase.slice(0, 10);
+        if (stats.summary && typeof stats.summary === 'object' && !Array.isArray(stats.summary) && JSON.stringify(stats.summary).length <= 6000) next.stats = stats.summary;
         const changed = Object.entries(next).some(([k, v]) => JSON.stringify(profile[k]) !== JSON.stringify(v));
         const stale = !profile.last_seen_at || Date.parse(profile.last_seen_at) < now.getTime() - 60000;
         if (changed || stale) {

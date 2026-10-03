@@ -3008,7 +3008,7 @@ begin
     into new.cards, new.unique_cards, new.collection_value
     from cards where user_id = new.id;
   if jsonb_typeof(s->'progress'->'level') = 'number' then
-    new.level := greatest(1, (s->'progress'->>'level')::numeric::integer);
+    new.level := least(500, greatest(1, (s->'progress'->>'level')::numeric::integer));
   end if;
   new.boosters_opened := case when jsonb_typeof(s->'boostersOpened') = 'number'
     then (s->>'boostersOpened')::numeric::integer else 0 end;
@@ -3812,6 +3812,7 @@ declare
   v_rank text;
   v_badges jsonb;
   v_showcase jsonb;
+  v_summary jsonb;
 begin
   if v_me is null then raise exception 'SIGN_IN'; end if;
 
@@ -3927,17 +3928,22 @@ begin
       select coalesce(jsonb_agg(t.x order by t.i), '[]'::jsonb) into v_showcase
         from jsonb_array_elements(p_stats->'showcase') with ordinality as t(x, i) where t.i <= 10;
     end if;
+    if jsonb_typeof(p_stats->'summary') = 'object' then
+      v_summary := public.stats_clean(p_stats->'summary');
+    end if;
     update profiles p set
       play_ms = coalesce(v_play, p.play_ms),
       rank = coalesce(v_rank, p.rank),
       badges = coalesce(v_badges, p.badges),
       showcase = coalesce(v_showcase, p.showcase),
+      stats = coalesce(v_summary, p.stats),
       last_seen_at = case when p.last_seen_at < v_now - interval '60 seconds' then v_now else p.last_seen_at end
     where p.id = v_me and (
       (v_play is not null and v_play is distinct from p.play_ms)
       or (v_rank is not null and v_rank is distinct from p.rank)
       or (v_badges is not null and v_badges is distinct from p.badges)
       or (v_showcase is not null and v_showcase is distinct from p.showcase)
+      or (v_summary is not null and v_summary is distinct from p.stats)
       or p.last_seen_at < v_now - interval '60 seconds'
     );
   end if;
@@ -4452,7 +4458,7 @@ begin
   new.unique_cards := e.n_unique;
   new.collection_value := e.n_value;
   if jsonb_typeof(s->'progress'->'level') = 'number' then
-    new.level := greatest(1, (s->'progress'->>'level')::numeric::integer);
+    new.level := least(500, greatest(1, (s->'progress'->>'level')::numeric::integer));
   end if;
   new.boosters_opened := case when jsonb_typeof(s->'boostersOpened') = 'number'
     then (s->>'boostersOpened')::numeric::integer else 0 end;
@@ -4466,6 +4472,10 @@ drop trigger if exists profile_stats_from_server on public.profiles;
 create trigger profile_stats_from_server
   before update of level, cards, unique_cards, boosters_opened, collection_value, best_rarity on public.profiles
   for each row execute function public.profile_stats_from_server();
+
+update public.econ set state = jsonb_set(state, '{progress}', jsonb_build_object('level', 500, 'xp', 0))
+  where jsonb_typeof(state->'progress'->'level') = 'number' and (state->'progress'->>'level')::numeric > 500;
+update public.profiles set level = 500 where level > 500;
 
 update public.econ e set n_cards = s.n, n_unique = s.u, n_value = s.v
   from (select c.user_id, sum(c.copies)::bigint n, count(*)::integer u, sum(c.price * c.copies)::bigint v
@@ -10526,6 +10536,65 @@ drop trigger if exists profile_badges_guard on public.profiles;
 create trigger profile_badges_guard
   before insert or update of badges on public.profiles
   for each row execute function public.profile_badges_guard();
+
+alter table public.profiles add column if not exists stats jsonb;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'profiles_stats_size') then
+    alter table public.profiles add constraint profiles_stats_size check (stats is null or octet_length(stats::text) <= 6000) not valid;
+  end if;
+end $$;
+
+create or replace function public.stats_clean(s jsonb)
+returns jsonb language plpgsql immutable set search_path = public, pg_temp as $$
+declare
+  v_nums constant text[] := array['at','off',
+    'cC','cU','cV','cF','cS','cX','cP','cB','cBa','cAs','cAc','cAe','cAm',
+    'bN','bC','bH','bPd','bPl','bS','bT','bW','bA','bLd','bLv','bLn','bR','bRa',
+    'eC','eI','eSp','eSb','eSo','eSe','eFu','eLs','eLb','eLw','eBi','eTr','eGs','eGr','eIe','eIs','eAt',
+    'aD','aSt','aSb','aG','aQ','aQh','aA','aAt','aSp','aSi','aSx','aSn','aR','aBr',
+    'gWp','gWw','gWs','gWb','gQp','gQw','gQf','gDb','gDr','gRr','gRf','gVp','gVw','gP',
+    'sF','sGd','sGg','sGm','sMs','sCv','sK','sSh','sSm'];
+  v_caps constant jsonb := '{"off":1,"cP":1000,"cB":7,"bR":7,"aSi":10,"sSh":100,"sSm":100}';
+  v_lists constant jsonb := '{"cPr":8,"cNw":12,"bPw":12,"bK":14,"cFm":24}';
+  v_out jsonb := '{"v":1}'::jsonb;
+  k text;
+  v jsonb;
+  m numeric;
+begin
+  if jsonb_typeof(s) is distinct from 'object' or octet_length(s::text) > 6000 then return null; end if;
+  foreach k in array v_nums loop
+    v := s->k;
+    if jsonb_typeof(v) = 'number' then
+      m := coalesce((v_caps->>k)::numeric, 10000000000000);
+      v_out := v_out || jsonb_build_object(k, least(m, greatest(0, round((v #>> '{}')::numeric)))::bigint);
+    end if;
+  end loop;
+  for k, m in select l.key, l.value::numeric from jsonb_each_text(v_lists) l loop
+    v := s->k;
+    if jsonb_typeof(v) = 'array' and jsonb_array_length(v) between 1 and m
+       and not exists (select 1 from jsonb_array_elements(v) x where jsonb_typeof(x) <> 'number') then
+      v_out := v_out || jsonb_build_object(k, (select jsonb_agg(least(10000000000000, greatest(0, round((t.x #>> '{}')::numeric)))::bigint order by t.i)
+        from jsonb_array_elements(v) with ordinality as t(x, i)));
+    end if;
+  end loop;
+  if (v_out->>'off') = '1' then
+    return jsonb_build_object('v', 1, 'off', 1) || case when v_out ? 'at' then jsonb_build_object('at', v_out->'at') else '{}'::jsonb end;
+  end if;
+  return v_out;
+end $$;
+
+create or replace function public.profile_stats_guard()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if new.stats is null then return new; end if;
+  if tg_op = 'UPDATE' and new.stats is not distinct from old.stats then return new; end if;
+  new.stats := public.stats_clean(new.stats);
+  return new;
+end $$;
+drop trigger if exists profile_stats_guard on public.profiles;
+create trigger profile_stats_guard
+  before insert or update of stats on public.profiles
+  for each row execute function public.profile_stats_guard();
 
 create or replace function public.friend_pictures_writer()
 returns boolean language plpgsql stable security definer set search_path = public, pg_temp as $$

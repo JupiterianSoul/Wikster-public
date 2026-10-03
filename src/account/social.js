@@ -225,9 +225,17 @@ export async function listConversations(selfId, { limit = TALK_PAGE, before = nu
 export { talkRow };
 
 export async function profileStats(id) {
+  const ask = (cols) => supabase.from('profiles').select(cols).eq('id', id).limit(1);
+  const build = (cols) => (live.statsColumn === false ? ask(cols) : ask(`${cols}, stats`).then((r) => {
+    if (r.error && isSchemaGap(r.error) && /stats/.test(String(r.error.message ?? ''))) {
+      live.statsColumn = false;
+      return ask(cols);
+    }
+    return r;
+  }));
   const rows = await readProfiles(
     'id, username, level, rank, cards, unique_cards, boosters_opened, collection_value, best_rarity, play_ms, created_at',
-    (cols) => supabase.from('profiles').select(cols).eq('id', id).limit(1), { appearance: true });
+    build, { appearance: true });
   return rows[0] ?? null;
 }
 

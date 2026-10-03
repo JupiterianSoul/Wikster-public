@@ -2,7 +2,7 @@ import { specId, specName } from '../booster.js';
 import { cleanCodeDef, codeDefsOf, codeSpec, learnCodeDefs, normalizeCode } from '../codedefs.js';
 import { priceFor } from '../pricing.js';
 import { RARITIES, rarityById } from '../data/rarities.js';
-import { addXp } from '../progression.js';
+import { addXp, cleanPending, normalizeProgress } from '../progression.js';
 import { accrue, emptyTimed } from '../timed.js';
 import { liveShelf } from '../shop.js';
 import { t } from '../i18n.js';
@@ -68,13 +68,14 @@ export function itemsOps(items, loaded, now) {
         const progress = progressOf();
         progress.level = item.value;
         progress.xp = 0;
+        normalizeProgress(progress);
         break;
       }
       case 'boostersOpened': ops.state.boostersOpened = item.value; break;
       default: break;
     }
   }
-  if (levels.length) ops.state.pendingLevels = [...(loaded.state.pendingLevels ?? []), ...levels];
+  if (levels.length) ops.state.pendingLevels = cleanPending([...(loaded.state.pendingLevels ?? []), ...levels]);
   if (!Object.keys(ops.state).length) delete ops.state;
   return { ops, keys, specs, levels };
 }

@@ -172,7 +172,8 @@ async function runDanger(which, ui) {
     say(ui, code === 'OPENINGS_PENDING' ? 'dangerBusy'
       : code === 'ALREADY_CLAIMED' ? 'econWipeWait'
         : ['TIMEOUT', 'CLOSED', 'NOT_LIVE', 'SERVER_DOWN'].includes(code) ? 'dangerNoServer'
-          : which === 'account' ? 'dangerAccountFailed' : 'dangerFailed');
+          : code === 'UNAUTHORISED' ? 'dangerSignInAgain'
+            : which === 'account' ? 'dangerAccountFailed' : 'dangerFailed');
     synth.playDenied();
     return;
   }

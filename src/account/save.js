@@ -243,8 +243,13 @@ export async function myData() {
   return data;
 }
 
-export async function deleteAccount() {
+export async function deleteAccount(retried = false) {
   const { data, error } = await supabase.functions.invoke(regional('delete-account'), { body: {} });
+  if (error && !retried && error.context?.status === 401) {
+    const { error: refreshError } = await supabase.auth.refreshSession();
+    if (!refreshError) return deleteAccount(true);
+    throw new Error('UNAUTHORISED');
+  }
   if (error) {
     let detail = '';
     try {

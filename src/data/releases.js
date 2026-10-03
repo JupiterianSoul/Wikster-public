@@ -1049,7 +1049,9 @@ export const RELEASES = [
       { en: 'New in the Atelier: Sakura Moon and Ouroboros (Epic, 300 Ink), Phoenix Plume and Astral Crown (Legendary, 500 Ink). The ten Rare frames keep their price of 150',
         fr: 'Nouveau dans l’Atelier : Lune de sakura et Ouroboros (Épique, 300 Encre), Plume du phénix et Couronne astrale (Légendaire, 500 Encre). Les dix cadres Rares gardent leur prix de 150' },
       { en: 'Higher grades move more: a light running round the rim, orbiting sparks, flickering flames. Movement stops with Reduce motion, Battery saver and on screens you are not looking at, and small frames such as the one in the app bar drop their finest details so the level number stays easy to read',
-        fr: 'Plus le rang est haut, plus le cadre bouge : une lumière qui court sur le bord, des étincelles en orbite, des flammes qui vacillent. Le mouvement s’arrête avec Réduire les animations, l’Économie de batterie et sur les écrans que vous ne regardez pas, et les petits cadres comme celui de la barre du haut perdent leurs plus fins détails pour que le niveau reste lisible' }
+        fr: 'Plus le rang est haut, plus le cadre bouge : une lumière qui court sur le bord, des étincelles en orbite, des flammes qui vacillent. Le mouvement s’arrête avec Réduire les animations, l’Économie de batterie et sur les écrans que vous ne regardez pas, et les petits cadres comme celui de la barre du haut perdent leurs plus fins détails pour que le niveau reste lisible' },
+      { en: 'Level 500 is the top and stays the top: XP earned there no longer brings up a level up, your ring stays full and says Max level on the phone and on PC, and a level that somehow went past 500 is read as 500',
+        fr: 'Le niveau 500 est le sommet et le reste : l’XP gagnée là-haut ne déclenche plus de passage de niveau, votre anneau reste plein et affiche Niveau maximum sur téléphone comme sur PC, et un niveau qui aurait dépassé 500 est lu comme 500' }
     ]
   },
   {

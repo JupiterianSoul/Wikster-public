@@ -10,7 +10,7 @@ const engine = await import('../../supabase/functions/economy/engine.js');
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4173/';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (fn, ms = 12000, step = 150) => {
-  const end = Date.now() + ms;
+  const end = Date.now() + ms * (process.env.CI ? 2.5 : 1);
   for (;;) {
     let ok = false;
     try { ok = await fn(); } catch { ok = false; }

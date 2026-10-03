@@ -43,6 +43,7 @@ import { wearLook, wearOpening, wornLook, wornOpening } from '../cosmetics.js';
 import { lookTile, openingTile } from './openpreview.js';
 import { emit } from '../ui/bus.js';
 import { customCard, customOwned, renderCustomTheme } from './customtheme.js';
+import { levelOf } from '../progression.js';
 
 export function settingRow(key, titleKey, noteKey) {
   const row = document.createElement('div');
@@ -114,6 +115,7 @@ export function renderSettings() {
   ].filter(Boolean));
 
   el.accountList.replaceChildren(...accountRows());
+  if (state.account.session) el.accountList.appendChild(settingRow('publicStats', 'settingsPublicStats', 'settingsPublicStatsNote'));
   if (adPrivacyRequired()) {
     const adRow = document.createElement('div');
     adRow.className = 'row';
@@ -561,7 +563,7 @@ export function renderCustomize() {
   el.identityList.replaceChildren(...identityRows());
 
   el.framesLabel.textContent = t('framesTitle');
-  const level = state.profile.progress.level ?? 1;
+  const level = levelOf(state.profile.progress);
   const tier = frameTier(level);
   el.framesNote.hidden = true;
   const wearing = frameStyle();
@@ -744,7 +746,7 @@ export function identityRows() {
     const face = document.createElement('span');
     face.className = 'person-mark row-action';
     paintAvatarInto(face, state.account.profile,
-      { frame: { style: frameStyle(), tier: frameTier(state.profile.progress.level) } });
+      { frame: { style: frameStyle(), tier: frameTier(levelOf(state.profile.progress)) } });
     face.style.cursor = 'pointer';
     face.addEventListener('click', () => { synth.playTap(); openAvatarPicker(); });
     avatarRow.appendChild(face);

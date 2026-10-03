@@ -8,6 +8,7 @@ import {
   starterCoins, stipendAmount, stipendHourOf, stipendMaxBanked, legacyWindowAt, windowIndexAt, freeWindowAt
 } from './economy.js';
 import { normalizeDaily } from './daily.js';
+import { cleanPending, normalizeProgress } from './progression.js';
 import { emptyTimed, accrue } from './timed.js';
 import { t } from './i18n.js';
 import { touch } from './save.js';
@@ -420,10 +421,8 @@ export function normalizeProfile(profile) {
   profile.boostersOpened ??= 0;
   profile.pity ??= 0;
   profile.rarityCounts ??= {};
-  profile.progress ??= { level: 1, xp: 0 };
-  profile.progress.level ??= 1;
-  profile.progress.xp ??= 0;
-  profile.pendingLevels ??= [];
+  profile.progress = normalizeProgress({ ...(profile.progress && typeof profile.progress === 'object' ? profile.progress : {}) });
+  profile.pendingLevels = cleanPending(profile.pendingLevels);
   profile.daily = normalizeDaily(profile.daily);
   profile.timed ??= emptyTimed();
   if (!profile.freeTaken || typeof profile.freeTaken !== 'object') profile.freeTaken = { window: null, ids: [] };
@@ -460,6 +459,7 @@ export function normalizeProfile(profile) {
   profile.settings.rarityShapes ??= false;
   profile.settings.spreadOpen ??= true;
   profile.settings.skipOpening ??= false;
+  profile.settings.publicStats ??= true;
   return profile;
 }
 
