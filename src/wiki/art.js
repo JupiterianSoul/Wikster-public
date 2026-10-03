@@ -1,8 +1,14 @@
-import { fetchJson } from './core.js';
+import { fetchJson, fetchJsonRetry } from './core.js';
 import { iconSvg } from '../data/icons.js';
-import { nameScore, nameTokens } from './finder.js';
+import { foldName, nameScore, nameTokens } from './finder.js';
 
 export const PICTURE_WIDTH = 640;
+export const PICTURE_VERSION = 2;
+export const TEXT_RETRY_MS = 3 * 24 * 3600 * 1000;
+export const PIXEL_EDGE = 128;
+export const PIXEL_MARK = '#wkpx';
+export const FILE_BATCH = 20;
+export const LISTING_ROUNDS = 8;
 export const STEP_TIMEOUT_MS = 4500;
 export const OPENVERSE_MAX = 3;
 export const OPENVERSE = 'https://api.openverse.org/v1/images/';
@@ -66,7 +72,11 @@ export function textCardArt({ title, subject = '', icon = 'book', accent = '#636
 
 export const isTextArt = (thumbnail) => String(thumbnail ?? '').startsWith('data:image/svg+xml');
 
+export const isPixelArt = (thumbnail) => String(thumbnail ?? '').endsWith(PIXEL_MARK);
+
 const cleanThumb = (url) => (typeof url === 'string' ? url.replace(/[?&]utm_[^#]*$/, '') : null);
+
+export const patientJson = (url, options = {}) => fetchJsonRetry(url, { tries: 3, budget: 9000, timeout: options.timeout ?? STEP_TIMEOUT_MS });
 
 async function quietly(work) {
   try { return await work; } catch { return null; }
@@ -90,6 +100,124 @@ export async function wikidataPictures(items, get = fetchJson) {
       thumbnail: src,
       picture: { source: 'wikidata', link: file ? `https://commons.wikimedia.org/wiki/File:${encodeURIComponent(file.replace(/ /g, '_'))}` : `https://www.wikidata.org/wiki/${it.qid}`, credit: 'Wikimedia Commons' }
     });
+  }
+  return found;
+}
+
+const compact = (text) => foldName(text).replace(/ /g, '');
+
+export const baseTitle = (title) => String(title ?? '').replace(/\s*\([^)]*\)\s*$/, '').split('/').pop().trim() || String(title ?? '');
+
+const FILE_NEVER = /(signature|commons-logo|wiktionary|wikiquote|wikisource|wikibooks|wikinews|wikiversity|wikivoyage|wikispecies|wikidata-logo|disambig|ambox|question[ _]book|edit-clear|ooui|oojs|crystal[ _]clear|nuvola|searchtool|padlock|semi-protection|red[ _]pencil|portal-puzzle|folder[ _]hexagonal|stub|placeholder|no[ _]image|noimage|blank|transparent|spacer|rarity[ _]colou?r|stack[ _]digit|wiki-wordmark|favicon|site-?logo|wordmark)/i;
+const FILE_LOOSE = /(icon|logo|flag|map|symbol|button|arrow|badge|banner|emblem|coat[ _]of[ _]arms|seal[ _]of|locator|location|chart|graph|diagram|sprite[ _]?sheet|coin|indicator|nav|ui[-_ ]|template)/i;
+const FILE_KIND = /\.(jpe?g|png|webp|gif|svg|tiff?)$/i;
+
+export function fileScore(title, file) {
+  const name = String(file ?? '').replace(/^[^:]+:/, '');
+  if (!FILE_KIND.test(name) || FILE_NEVER.test(name)) return 0;
+  const stem = compact(name.replace(FILE_KIND, ''));
+  const whole = compact(title);
+  const base = compact(baseTitle(title));
+  if (!stem || !base) return 0;
+  let score = 0;
+  if (stem === whole || stem === base) score = 3;
+  else if ((base.length >= 4 && stem.includes(base)) || (whole.length >= 4 && stem.includes(whole))) score = 2;
+  else {
+    const words = nameTokens(baseTitle(title)).filter((w) => w.length >= 3);
+    const said = foldName(name.replace(FILE_KIND, '')).split(' ');
+    const hits = words.filter((w) => said.includes(w) || (w.length > 4 && stem.includes(w)));
+    if (words.length && hits.length / words.length >= 0.6 && hits.some((w) => w.length >= 4)) score = 1;
+  }
+  if (!score) return 0;
+  if (/\.svg$/i.test(name) && score < 2) return 0;
+  if (FILE_LOOSE.test(name) && score < 2) return 0;
+  return score;
+}
+
+const MIN_EDGE_BY_SCORE = { 3: 16, 2: 24, 1: 120 };
+
+export function fileArt(info, score, apiUrl) {
+  if (!info) return null;
+  const w = Number(info.width) || 0;
+  const h = Number(info.height) || 0;
+  if (w && h) {
+    if (Math.min(w, h) < (MIN_EDGE_BY_SCORE[score] ?? 120)) return null;
+    if (w / h > 4 || h / w > 4) return null;
+  }
+  const mime = String(info.mime ?? '');
+  if (mime && !/^image\/(jpeg|png|webp|gif|svg\+xml|tiff)$/i.test(mime)) return null;
+  const big = w > PICTURE_WIDTH || /svg|tiff/i.test(mime);
+  let src = (big ? info.thumburl : null) ?? info.url ?? info.thumburl;
+  if (typeof src !== 'string' || !src) return null;
+  try { src = new URL(src.startsWith('//') ? `https:${src}` : src, apiUrl).href; } catch { return null; }
+  if (!/^https:\/\//.test(src)) return null;
+  const pixel = Boolean(w && h && Math.max(w, h) < PIXEL_EDGE && /png|gif/i.test(mime || src));
+  return { thumbnail: pixel ? `${src.replace(/#.*$/, '')}${PIXEL_MARK}` : src, picture: { source: 'page', ...(pixel ? { pixel: true } : {}) } };
+}
+
+export async function pageListing(items, apiUrl, get = fetchJson) {
+  const found = new Map();
+  for (let i = 0; i < items.length; i += FILE_BATCH) {
+    const chunk = items.slice(i, i + FILE_BATCH);
+    const params = {
+      action: 'query', titles: chunk.map((it) => it.title).join('|'), prop: 'images|pageprops', ppprop: 'wikibase_item',
+      imlimit: 'max', redirects: '1', format: 'json', origin: '*'
+    };
+    let data = await get(`${apiUrl}?${new URLSearchParams(params)}`, { timeout: STEP_TIMEOUT_MS });
+    const back = new Map();
+    const pages = new Map();
+    for (let round = 0; data && round < LISTING_ROUNDS; round++) {
+      for (const n of [...(data?.query?.normalized ?? []), ...(data?.query?.redirects ?? [])]) back.set(n.to, back.get(n.from) ?? n.from);
+      for (const page of Object.values(data?.query?.pages ?? {})) {
+        if (!page?.title) continue;
+        const held = pages.get(page.title) ?? { files: [], qid: null };
+        held.files.push(...(page.images ?? []).map((f) => f.title).filter(Boolean));
+        held.qid = held.qid ?? page.pageprops?.wikibase_item ?? null;
+        pages.set(page.title, held);
+      }
+      const more = data?.continue?.imcontinue;
+      if (!more) break;
+      const settled = [...pages].every(([title, held]) => held.files.some((file) => fileScore(back.get(title) ?? title, file) >= 2));
+      if (settled && pages.size >= chunk.length) break;
+      data = await get(`${apiUrl}?${new URLSearchParams({ ...params, imcontinue: more, continue: data.continue.continue ?? '||' })}`, { timeout: STEP_TIMEOUT_MS }).catch(() => null);
+    }
+    for (const [title, held] of pages) found.set(back.get(title) ?? title, held);
+  }
+  return found;
+}
+
+export async function filePictures(items, apiUrl, listing, get = fetchJson) {
+  const found = new Map();
+  const picks = new Map();
+  for (const it of items) {
+    const files = listing?.get(it.title)?.files ?? [];
+    const ranked = [...new Set(files)].map((file) => ({ file, score: fileScore(it.title, file) }))
+      .filter((f) => f.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 2);
+    if (ranked.length) picks.set(it.title, ranked);
+  }
+  const names = [...new Set([...picks.values()].flat().map((f) => f.file))];
+  if (!names.length) return found;
+  const infos = new Map();
+  for (let i = 0; i < names.length; i += 50) {
+    const data = await get(`${apiUrl}?${new URLSearchParams({
+      action: 'query', titles: names.slice(i, i + 50).join('|'), prop: 'imageinfo', iiprop: 'url|size|mime',
+      iiurlwidth: String(PICTURE_WIDTH), format: 'json', origin: '*'
+    })}`, { timeout: STEP_TIMEOUT_MS });
+    const normal = new Map((data?.query?.normalized ?? []).map((n) => [n.to, n.from]));
+    for (const page of Object.values(data?.query?.pages ?? {})) {
+      const info = page?.imageinfo?.[0];
+      if (!info) continue;
+      infos.set(page.title, info);
+      if (normal.has(page.title)) infos.set(normal.get(page.title), info);
+    }
+  }
+  for (const [title, ranked] of picks) {
+    for (const { file, score } of ranked) {
+      const got = fileArt(infos.get(file), score, apiUrl);
+      if (got) { found.set(title, got); break; }
+    }
   }
   return found;
 }
@@ -159,11 +287,14 @@ export function licenceName(hit) {
 export async function openversePicture(title, { hint = null, allowMature = false, get = fetchJson } = {}) {
   const q = [title, hint].filter(Boolean).join(' ').slice(0, 120);
   const data = await get(`${OPENVERSE}?${new URLSearchParams({ q, page_size: '8', mature: allowMature ? 'true' : 'false' })}`, { timeout: STEP_TIMEOUT_MS });
-  const words = nameTokens(title);
+  const words = nameTokens(title).filter((w) => w.length >= 3);
+  const context = nameTokens(hint ?? '').filter((w) => w.length >= 3 && !words.includes(w));
+  const seen = (w, said) => said.some((s) => s === w || (w.length > 4 && s.startsWith(w.slice(0, -1))));
   for (const hit of data?.results ?? []) {
     if (!allowMature && hit.mature) continue;
     const said = nameTokens(`${hit.title ?? ''} ${(hit.tags ?? []).map((tag) => tag?.name ?? '').join(' ')}`);
-    if (words.length && !words.some((w) => said.some((s) => s === w || (w.length > 4 && s.startsWith(w.slice(0, -1)))))) continue;
+    if (!words.length || !words.every((w) => seen(w, said))) continue;
+    if (words.length < 2 && context.length && !context.some((w) => seen(w, said))) continue;
     const thumbnail = openverseThumb(hit);
     if (!thumbnail) continue;
     return {
@@ -180,23 +311,35 @@ export async function openversePicture(title, { hint = null, allowMature = false
   return null;
 }
 
-const toRow = (key, got) => ({
+const toRow = (key, got, now = Date.now()) => ({
   key,
   image: got.picture.source === 'text' ? null : got.thumbnail,
   source: got.picture.source,
   license: got.picture.license ?? null,
   credit: got.picture.credit ?? null,
   link: got.picture.link ?? null,
-  extra: { from: got.picture.from ?? null, licenseUrl: got.picture.licenseUrl ?? null }
+  extra: {
+    from: got.picture.from ?? null, licenseUrl: got.picture.licenseUrl ?? null,
+    ...(got.picture.pixel ? { pixel: true } : {}),
+    ...(got.picture.source === 'text' ? { v: PICTURE_VERSION, at: now } : {})
+  }
 });
+
+export function staleText(row, now = Date.now()) {
+  if (row?.source !== 'text' && row?.image) return false;
+  const v = Number(row?.extra?.v) || 0;
+  const at = Number(row?.extra?.at) || 0;
+  return v !== PICTURE_VERSION || !(now - at < TEXT_RETRY_MS);
+}
 
 const fromRow = (row, look, title) => {
   if (!row?.source) return null;
-  if (row.source === 'text' || !row.image) return textPicture(title, look);
+  if (row.source === 'text' || !row.image) return staleText(row) ? null : textPicture(title, look);
   return {
     thumbnail: row.image,
     picture: {
       source: row.source,
+      ...(row.extra?.pixel ? { pixel: true } : {}),
       ...(row.license ? { license: row.license } : {}),
       ...(row.credit ? { credit: row.credit } : {}),
       ...(row.link ? { link: row.link } : {}),
@@ -236,7 +379,7 @@ function remember(rows) {
   if (cache?.put) quietly(cache.put(rows));
 }
 
-export async function findPictures(pages, { apiUrl, host = null, hint = null, allowMature = false, look = null, get = fetchJson, deadline = Date.now() + 9000, openverse = OPENVERSE_MAX, steps = null } = {}) {
+export async function findPictures(pages, { apiUrl, host = null, hint = null, allowMature = false, look = null, get = patientJson, deadline = Date.now() + 9000, openverse = OPENVERSE_MAX, steps = null } = {}) {
   const site = host ?? (() => { try { return new URL(apiUrl).hostname; } catch { return ''; } })();
   const items = pages.filter((p) => p?.title).map((p) => ({ title: p.title, qid: p.pageprops?.wikibase_item ?? p.qid ?? null, key: pictureKey(site, p.title) }));
   const result = new Map();
@@ -259,8 +402,16 @@ export async function findPictures(pages, { apiUrl, host = null, hint = null, al
       return false;
     });
   };
-  const run = steps ?? ['wikidata', 'linked', 'openverse'];
+  const run = steps ?? ['files', 'wikidata', 'linked', 'openverse'];
+  let listing = null;
+  let listed = !apiUrl || !run.includes('files');
+  if (left.length && !late() && apiUrl && run.includes('files')) {
+    listing = await quietly(pageListing(left, apiUrl, get));
+    listed = listing != null;
+    for (const it of left) it.qid = it.qid ?? listing?.get(it.title)?.qid ?? null;
+  }
   if (left.length && !late() && run.includes('wikidata')) settle(await quietly(wikidataPictures(left, get)));
+  if (left.length && !late() && listing) settle(await quietly(filePictures(left, apiUrl, listing, get)));
   if (left.length && !late() && run.includes('linked') && apiUrl) settle(await quietly(linkedPictures(left, apiUrl, get)));
   if (left.length && !late() && run.includes('openverse')) {
     const tries = left.slice(0, openverse);
@@ -279,7 +430,7 @@ export async function findPictures(pages, { apiUrl, host = null, hint = null, al
   for (const it of left) {
     const got = textPicture(it.title, look);
     result.set(it.title, got);
-    if (it.tried && !it.shaky && !late()) fresh.push(toRow(it.key, got));
+    if (it.tried && !it.shaky && listed && !late()) fresh.push(toRow(it.key, got));
   }
   remember(fresh);
   return result;

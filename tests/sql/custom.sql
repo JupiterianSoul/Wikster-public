@@ -27,6 +27,8 @@ select t_is('a picture is found once for everyone', (select count(*) = 2 from js
 select t_is('with where it came from', (select r->'extra'->>'from' = 'Pine' from jsonb_array_elements(pictures_get(array['en.wikipedia.org|Pine tree'])) r));
 select pictures_put('[{"key":"zelda.fandom.com|Goselle","image":"https://static.wikia.nocookie.net/g.png","source":"openverse","license":"CC BY 2.0","credit":"Someone"}]');
 select t_is('a later find replaces a text card', (select r->>'source' = 'openverse' and r->>'license' = 'CC BY 2.0' from jsonb_array_elements(pictures_get(array['zelda.fandom.com|Goselle'])) r));
+select pictures_put('[{"key":"calamitymod.wiki.gg|Sacrifice","image":"https://calamitymod.wiki.gg/images/Sacrifice.png#wkpx","source":"page","extra":{"pixel":true}}]');
+select t_is('a picture from the page''s own files is kept too', (select r->>'source' = 'page' and (r->'extra'->>'pixel')::boolean from jsonb_array_elements(pictures_get(array['calamitymod.wiki.gg|Sacrifice'])) r));
 select t_is('players cannot read the caches themselves', (select bool_and(c.relrowsecurity) from pg_class c where c.oid in ('public.card_pictures'::regclass, 'public.wiki_finds'::regclass, 'public.wiki_sites'::regclass))
   and not exists (select 1 from pg_policies where tablename in ('card_pictures', 'wiki_finds', 'wiki_sites'))
   and not has_function_privilege('authenticated', 'public.pictures_put(jsonb)', 'execute') and not has_function_privilege('anon', 'public.wiki_find_get(text)', 'execute'));

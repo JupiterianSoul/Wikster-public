@@ -41,6 +41,7 @@ const get = async (url) => {
     }
     return { results: [] };
   }
+  if (p.get('prop') === 'images|pageprops') return { query: { pages: {} } };
   if (p.get('prop') === 'links') {
     order.push('links');
     return { query: { pages: {
@@ -93,5 +94,63 @@ got = await fresh.findPictures([{ title: 'Gamma' }], { apiUrl: 'https://en.wikip
 check('when Openverse fails the card still gets a text card', got.get('Gamma')?.picture.source === 'text');
 check('but that miss is not kept, so it is searched again later', !saved.has('en.wikipedia.org|Gamma'));
 check('a picture cache read is made per batch, not per card', reads <= 2, String(reads));
+const unsure = await import('../../src/wiki/art.js?unsure');
+const keptRows = [];
+unsure.usePictureCache({ async get() { return []; }, async put(rows) { keptRows.push(...rows); } });
+await unsure.findPictures([{ title: 'Busy' }], { apiUrl: 'https://eldenring.wiki.gg/api.php', get: async (url) => { if (new URL(url).searchParams.get('prop') === 'images|pageprops') throw Object.assign(new Error('Wiki responded 429'), { status: 429 }); return { query: { pages: {} }, results: [] }; } });
+check('a text card is not kept when the wiki was too busy to list its files', keptRows.length === 0);
+
+const { fileScore, staleText, PICTURE_VERSION, TEXT_RETRY_MS, isPixelArt } = A;
+check('a file named after the page is its picture', fileScore('Sacrifice', 'File:Sacrifice.png') === 3 && fileScore('Lily Pad', 'File:Lilypad.png') === 3);
+check('a file that holds the whole title counts even with icon in its name', fileScore("Carian Knight's Sword", "File:ER Icon weapon Carian Knight's Sword.png") === 2);
+check('icons, flags and logos of something else are never used', fileScore('Sacrifice', 'File:Auto icon.png') === 0 && fileScore('Daybroken', 'File:Gold Coin.png') === 0 && fileScore('Germany national team', 'File:Flag of Germany.svg') === 0);
+check('signatures and wiki furniture are never used', fileScore('Ada Lovelace', 'File:Ada Lovelace signature.svg') === 0 && fileScore('Stub', 'File:Question book-new.svg') === 0);
+check('sounds are not pictures', fileScore('Sacrifice', 'File:Sacrifice.wav') === 0);
+
+const filesGet = async (url) => {
+  const u = new URL(url);
+  const p = u.searchParams;
+  if (p.get('prop') === 'images|pageprops') {
+    return { query: {
+      normalized: [{ from: 'hive pod', to: 'Hive Pod' }],
+      pages: {
+        1: { title: 'Hive Pod', images: [{ title: 'File:Auto icon.png' }, { title: 'File:Hive Pod.png' }, { title: 'File:Rarity color 7.png' }] },
+        2: { title: 'Fujian', pageprops: { wikibase_item: 'Q9' }, images: [{ title: 'File:Flag of China.svg' }] },
+        3: { title: 'Plain', images: [{ title: 'File:Something else.jpg' }] }
+      }
+    } };
+  }
+  if (p.get('prop') === 'imageinfo') {
+    return { query: { pages: { '-1': { title: 'File:Hive Pod.png', imageinfo: [{ url: '/images/Hive_Pod.png?77e5c2', width: 40, height: 38, mime: 'image/png' }] } } } };
+  }
+  if (u.hostname === 'www.wikidata.org') {
+    return { query: { pages: { 9: { title: 'Q9', thumbnail: { source: 'https://upload.wikimedia.org/fujian.jpg', width: 640 }, pageimage: 'Fujian.jpg' } } } };
+  }
+  return { query: { pages: {} }, results: [] };
+};
+const plain = await import('../../src/wiki/art.js?files');
+plain.usePictureCache(null);
+const files = await plain.findPictures([{ title: 'hive pod' }, { title: 'Fujian' }, { title: 'Plain' }], { apiUrl: 'https://calamitymod.wiki.gg/api.php', get: filesGet, openverse: 0 });
+const pod = files.get('hive pod');
+check('a page without PageImages takes the file named after it', pod?.picture.source === 'page' && pod.thumbnail.startsWith('https://calamitymod.wiki.gg/images/Hive_Pod.png'));
+check('a small sprite is marked as pixel art so it is drawn crisp', pod?.picture.pixel === true && isPixelArt(pod.thumbnail));
+check('the Wikidata item found while listing files gives its picture', files.get('Fujian')?.picture.source === 'wikidata');
+check('a page with nothing fitting keeps its text card', files.get('Plain')?.picture.source === 'text');
+
+const now = Date.now();
+check('a text card found with an older picture search is searched again', staleText({ source: 'text', extra: null }, now) && staleText({ source: 'text', extra: { v: PICTURE_VERSION - 1, at: now } }, now));
+check('a recent text card is kept for a while, then searched again', !staleText({ source: 'text', extra: { v: PICTURE_VERSION, at: now - 1000 } }, now) && staleText({ source: 'text', extra: { v: PICTURE_VERSION, at: now - TEXT_RETRY_MS - 1 } }, now));
+check('a real picture is never searched again', !staleText({ source: 'page', image: 'https://x.org/a.png' }, now));
+saved.set('en.wikipedia.org|Old miss', { key: 'en.wikipedia.org|Old miss', source: 'text', image: null, extra: {} });
+order.length = 0;
+await findPictures([{ title: 'Old miss' }], { apiUrl: 'https://en.wikipedia.org/w/api.php', look, get: async (url) => { order.push(url); return { query: { pages: {} }, results: [] }; } });
+check('so an old stuck text card in the cache is looked up again', order.length > 0);
+
+const ov = (results) => async () => ({ results });
+const lamp = { title: 'Tiffany lamp', url: 'https://live.staticflickr.com/1/lamp_b.jpg', license: 'by', tags: [{ name: 'tiffany' }, { name: 'lamp' }] };
+check('an Openverse photo must match every word of the title', await A.openversePicture('Tiffany (automobile)', { hint: 'Cars', get: ov([lamp]) }) === null);
+const fashion = { title: 'Looks', url: 'https://live.staticflickr.com/1/looks_b.jpg', license: 'by', tags: [{ name: 'fashion' }] };
+check('and a one word title must also match the booster it is for', await A.openversePicture('Looks', { hint: 'Snap! Wiki', get: ov([fashion]) }) === null
+  && (await A.openversePicture('Looks', { hint: 'Snap! Wiki', get: ov([{ ...fashion, tags: [{ name: 'snap' }] }]) }))?.picture.source === 'openverse');
 
 done();

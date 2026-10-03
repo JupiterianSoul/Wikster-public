@@ -9839,6 +9839,8 @@ create table if not exists public.card_pictures (
   at      timestamptz not null default now()
 );
 alter table public.card_pictures enable row level security;
+alter table public.card_pictures drop constraint if exists card_pictures_source_check;
+alter table public.card_pictures add constraint card_pictures_source_check check (source in ('wikidata', 'linked', 'openverse', 'text', 'page'));
 
 revoke all on table public.wiki_finds, public.wiki_sites, public.card_pictures from public, anon, authenticated;
 grant select, insert, update, delete on table public.wiki_finds, public.wiki_sites, public.card_pictures to service_role;
@@ -9890,7 +9892,7 @@ begin
     select left(r->>'key', 400), left(r->>'image', 1000), r->>'source', left(r->>'license', 80), left(r->>'credit', 200),
       left(r->>'link', 1000), case when jsonb_typeof(r->'extra') = 'object' then r->'extra' end, now()
     from (select value r from jsonb_array_elements(p_rows) limit 80) x
-    where coalesce(r->>'key', '') <> '' and r->>'source' in ('wikidata', 'linked', 'openverse', 'text')
+    where coalesce(r->>'key', '') <> '' and r->>'source' in ('wikidata', 'linked', 'openverse', 'text', 'page')
       and (r->>'source' = 'text' or coalesce(r->>'image', '') ~ '^https://')
     on conflict (key) do update set image = excluded.image, source = excluded.source, license = excluded.license,
       credit = excluded.credit, link = excluded.link, extra = excluded.extra, at = excluded.at;

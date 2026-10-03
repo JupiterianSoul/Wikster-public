@@ -7,7 +7,7 @@ export const POOL_LIMIT = 20;
 
 export const PAGE_PROPS = {
   prop: 'extracts|pageimages|categories|info|description|revisions|pageprops',
-  ppprop: 'wikibase_item',
+  ppprop: 'wikibase_item|disambiguation',
   rvprop: 'timestamp|user|tags',
   exintro: '1', explaintext: '1', exchars: '600', exlimit: String(POOL_LIMIT),
   piprop: 'thumbnail|original', pilimit: String(POOL_LIMIT),
@@ -108,6 +108,8 @@ export function freshlyVandalised(page, now = Date.now()) {
   const user = String(rev.user ?? '');
   return 'anon' in rev || 'temp' in rev || user.startsWith('~') || /^[\d.:a-f]+$/i.test(user);
 }
+
+export const isDisambiguation = (page) => page?.pageprops?.disambiguation !== undefined;
 
 export function pageToCard(page, views, art = null) {
   const thumbnail = art?.thumbnail ?? bestImage(page);

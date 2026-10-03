@@ -1561,6 +1561,7 @@ input[type='search']::-webkit-search-cancel-button { filter: invert(1) opacity(0
 .frame-card .frame-copy { flex: 1; min-width: 0; }
 .fx-chip .atelier-buy { width: 100%; justify-content: center; }
 .atelier-buy .buy-price { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; }
+.atelier-buy.btn-primary .buy-price { color: inherit; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, currentColor 14%, transparent); }
 .atelier-buy.is-short {
   background: var(--ui-plate);
   border-color: var(--ui-line);
@@ -2968,7 +2969,9 @@ html[data-lowpower='1'] .frame-overlay .fr-layer { animation: none !important; }
 .look-tile .atelier-buy, .opening-tile .atelier-buy { align-self: stretch; }
 .look-tile.is-hint { justify-content: center; text-align: center; border-style: dashed; min-height: 120px; }
 .look-stage { display: grid; place-items: center; padding: 14px 0 10px; border-radius: 10px; background: radial-gradient(80% 70% at 50% 40%, color-mix(in srgb, var(--ink) 8%, transparent), transparent 75%); --pack-w: 92px; }
-.look-stage .booster { --pack-w: 92px; --pack-h: calc(92px * 1.79); }
+.look-stage .booster { --pack-w: 92px; --pack-h: calc(92px * 1.79); transition: transform .35s cubic-bezier(.2,.8,.3,1); will-change: transform; }
+.look-stage { perspective: 600px; }
+@media (prefers-reduced-motion: reduce) { .look-stage .booster { transition: none; transform: none !important; } }
 
 .ofx-stage { position: relative; aspect-ratio: 16 / 10; border-radius: 10px; overflow: hidden; cursor: pointer; background: radial-gradient(80% 80% at 50% 45%, color-mix(in srgb, var(--ink) 10%, #151a28), #0b0e16 72%); perspective: 900px; }
 .ofx-stage.is-still { cursor: default; display: grid; place-items: center; }

@@ -1,6 +1,8 @@
 import { getLanguage, wikiLang } from '../i18n.js';
 import { dealSets, gatherWikipedia, shuffled } from './draw.js';
-import { customPoolKey, gatherCustomFor } from './custom.js';
+import { customPoolKey, gatherCustomFor, lookOf } from './custom.js';
+import { ACTION } from './core.js';
+import { findPictures, isTextArt, textPicture } from './art.js';
 import { fetchTopRead } from './fetch.js';
 import { titleCards } from './translate.js';
 import { cardAllowed } from './safety.js';
@@ -17,9 +19,12 @@ export const REFILL_LANES = 4;
 export const REFILL_BUDGET_MS = 25000;
 export const REFILLS_AT_ONCE = 2;
 export const SAMPLE_SLACK = 1.2;
+export const CUSTOM_SAMPLE_SLACK = 2;
 export const SAMPLE_MAX = 400;
 export const EXTRACT_MAX = 600;
 export const DESCRIPTION_MAX = 160;
+export const REPICTURE_MAX = 20;
+export const CUSTOM_POOL_VERSION = 2;
 
 let store = null;
 const refilling = new Set();
@@ -47,14 +52,23 @@ const clip = (text, max) => {
   return `${(at > max * 0.6 ? cut.slice(0, at) : cut).trimEnd()}…`;
 };
 
-export function compactCard(card) {
+export const isPlate = (card) => !card?.thumbnail || isTextArt(card.thumbnail) || card.picture?.source === 'text';
+
+export function compactCard(card, { plates = false } = {}) {
   if (!card?.key || !card.title) return null;
   const { wordCount: _w, article: _a, ...rest } = card;
+  const plate = plates && isPlate(card);
   return {
     ...rest,
+    ...(plate ? { thumbnail: null, picture: { source: 'text' } } : {}),
     extract: clip(card.extract, EXTRACT_MAX),
     description: clip(card.description, DESCRIPTION_MAX)
   };
+}
+
+export function withPlate(card, look) {
+  if (card?.thumbnail && !isTextArt(card.thumbnail)) return card;
+  return { ...card, ...textPicture(card.title, look) };
 }
 
 function wikipediaPlan(pack) {
@@ -64,6 +78,8 @@ function wikipediaPlan(pack) {
   return {
     id: `wp:${lang}:${hash(JSON.stringify([queries, match]))}`,
     kind: 'wiki',
+    api: ACTION(),
+    look: { ...(pack.look ?? {}), subject: pack.name },
     max: POOL_MAX,
     low: POOL_LOW,
     stale: POOL_STALE_S,
@@ -76,8 +92,12 @@ async function customPlan(pack) {
   if (!pack.wiki?.apiUrl) return null;
   const { wiki, key } = await customPoolKey(pack);
   return {
-    id: `cw:${getLanguage()}:${key}`,
+    id: `cw${CUSTOM_POOL_VERSION}:${getLanguage()}:${key}`,
     kind: 'custom',
+    api: wiki.apiUrl,
+    hint: wiki.topic ?? pack.name,
+    mature: Boolean(wiki.mature),
+    look: lookOf(pack, wiki),
     max: POOL_MAX,
     low: POOL_LOW,
     stale: POOL_STALE_S,
@@ -143,7 +163,25 @@ export function usableFromPool(cards, plan, { safe = false } = {}) {
     && isUsableText(card.title, card.extract) && cardAllowed(card, { safe }) && (!plan.keep || plan.keep(card)));
 }
 
-async function refill(plan, extra = [], size = 0) {
+export async function repicture(plan, plates) {
+  const list = (Array.isArray(plates) ? plates : []).filter((card) => card?.title && isPlate(card)).slice(0, REPICTURE_MAX);
+  if (!list.length || !plan.api) return [];
+  const found = await findPictures(list.map((card) => ({ title: card.title })), {
+    apiUrl: plan.api, hint: plan.hint ?? null, allowMature: Boolean(plan.mature), look: plan.look ?? null, deadline: Date.now() + 8000
+  }).catch(() => null);
+  const out = [];
+  for (const card of list) {
+    const got = found?.get(card.title);
+    if (!got || got.picture?.source === 'text') continue;
+    const next = { ...card, thumbnail: got.thumbnail };
+    if (got.picture && (got.picture.source !== 'page' || got.picture.pixel)) next.picture = got.picture;
+    else delete next.picture;
+    out.push(next);
+  }
+  return out;
+}
+
+async function refill(plan, extra = [], size = 0, plates = []) {
   if (!store || refilling.has(plan.id)) return;
   const fetching = refilling.size < REFILLS_AT_ONCE;
   if (!fetching && !extra.length) { await store.release?.(plan.id).catch(() => {}); return; }
@@ -151,12 +189,13 @@ async function refill(plan, extra = [], size = 0) {
   const started = Date.now();
   try {
     const count = size >= plan.low ? ROTATE_COUNT : Math.min(REFILL_COUNT, Math.max(ROTATE_COUNT, plan.max - size));
-    const got = fetching ? await plan.fill(count).catch(() => []) : [];
+    const mended = fetching ? await repicture(plan, plates).catch(() => []) : [];
+    const got = fetching ? [...mended, ...await plan.fill(count).catch(() => [])] : [];
     const stamped = plan.kind === 'wiki' || plan.kind === 'custom';
     const rows = [];
     const seen = new Set();
     for (const card of [...extra, ...(Array.isArray(got) ? got : [])]) {
-      const row = compactCard(card);
+      const row = compactCard(card, { plates: stamped });
       if (!row || seen.has(row.key) || !isUsableText(row.title, row.extract)) continue;
       if (stamped) delete row.rarityId;
       seen.add(row.key);
@@ -185,7 +224,7 @@ export async function drawFromPool(pack, n, { safe = false, random = Math.random
   if (!plan) return null;
   const sets = Math.max(1, Math.floor(Number(n) || 1));
   const per = Math.max(1, Number(plan.kind === 'titles' ? pack.pick : pack.cards) || 5);
-  const ask = Math.min(SAMPLE_MAX, Math.ceil(per * sets * SAMPLE_SLACK) + 5);
+  const ask = Math.min(SAMPLE_MAX, Math.ceil(per * sets * (plan.kind === 'custom' ? CUSTOM_SAMPLE_SLACK : SAMPLE_SLACK)) + 5);
   let got = null;
   try {
     got = await store.draw(plan.id, ask, { low: plan.low, stale: plan.stale, kind: plan.kind });
@@ -193,22 +232,26 @@ export async function drawFromPool(pack, n, { safe = false, random = Math.random
     console.warn('pool read', plan.id, error?.message ?? error);
     return null;
   }
-  const usable = usableFromPool(got?.cards, plan, { safe });
+  const all = usableFromPool(got?.cards, plan, { safe });
+  const platesOk = plan.kind === 'wiki' || plan.kind === 'custom';
+  const plates = platesOk ? all.filter(isPlate) : [];
+  const pictured = all.filter((card) => !isPlate(card));
+  const usable = platesOk ? (pictured.length >= per * sets ? pictured : all).map((card) => withPlate(card, plan.look)) : all;
   const dealt = usable.length ? plan.deal(usable, sets, random) : [];
   const full = dealt.filter((set) => set.length >= Math.min(per, usable.length));
   const missing = sets - full.length;
   if (!missing) {
-    if (got?.due) background(refill(plan, [], Number(got?.size) || 0));
+    if (got?.due) background(refill(plan, [], Number(got?.size) || 0, plates));
     return full;
   }
   if (typeof live !== 'function') {
-    if (got?.due) background(refill(plan, [], Number(got?.size) || 0));
+    if (got?.due) background(refill(plan, [], Number(got?.size) || 0, plates));
     return full;
   }
   const used = new Set(full.flat().map((card) => card.key));
   const extra = (await live(missing).catch(() => [])).filter((set) => Array.isArray(set) && set.length)
     .map((set) => set.filter((card) => !used.has(card.key))).filter((set) => set.length);
-  if (got?.due) background(refill(plan, extra.flat(), Number(got?.size) || 0));
+  if (got?.due) background(refill(plan, extra.flat(), Number(got?.size) || 0, plates));
   return [...full, ...extra];
 }
 

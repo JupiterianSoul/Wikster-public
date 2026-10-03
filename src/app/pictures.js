@@ -138,6 +138,7 @@ export function pictureCors(url) {
 }
 
 export function showPicture(img, url, onFail) {
+  if (String(url ?? '').endsWith('#wkpx')) img.classList.add('is-pixel');
   const cors = pictureCors(url);
   if (cors) img.crossOrigin = cors;
   img.addEventListener('error', () => {

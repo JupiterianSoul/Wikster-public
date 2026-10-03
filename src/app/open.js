@@ -627,7 +627,7 @@ onOpenRefused((entry) => {
   if (!entry.cards.every((c) => state.collection.entries[c.article.key])) toast(esc(t('openNotSaved')), 'error');
 });
 
-async function runEffect(id, booster, cards = state.cards) {
+async function runEffect(id, booster, cards = state.cards, extra = {}) {
   const rect = booster.getBoundingClientRect();
   const root = document.createElement('div');
   root.className = 'ofx-root';
@@ -658,7 +658,7 @@ async function runEffect(id, booster, cards = state.cards) {
     return ghost;
   });
   try {
-    await playOpening(id, { root, center, pack, packW: rect.width, packH: rect.height, cards: ghosts, targets });
+    await playOpening(id, { ...extra, root, center, pack, packW: rect.width, packH: rect.height, cards: ghosts, targets });
   } finally {
     cards.forEach((card) => card.classList.remove('is-veiled'));
     root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }).finished.catch(() => {}).then(() => root.remove());

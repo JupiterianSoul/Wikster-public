@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { CORS, json, callerId, tokenCaller, admin, projectUrl, serviceKey } from '../_shared/caller.ts';
 import { writeQuiz } from '../_shared/quizgen.ts';
-import { runAsked, EconError, androidRequest, deltaReply, firstLoad, drawArticles, drawArticlesMany, fetchAlbumTotal, fetchArticleText, findWikis, inspectWiki, setRequestHeaders, titleCards, useCustomPool, useFinderCache, useAdultWikis, useLanguageSource, useLiveSource, usePictureCache, useArticlePool, warmCustomPool } from './engine.js';
+import { runAsked, EconError, androidRequest, deltaReply, firstLoad, drawArticles, drawArticlesMany, fetchAlbumTotal, fetchArticleText, findPictures, findWikis, inspectWiki, setRequestHeaders, titleCards, useCustomPool, useFinderCache, useAdultWikis, useLanguageSource, useLiveSource, usePictureCache, useArticlePool, warmCustomPool } from './engine.js';
 
 const runWith = runAsked as (ctx: unknown, action: string, args: unknown, options: { ready: unknown }) => Promise<any>;
 const language = new AsyncLocalStorage<string>();
@@ -293,6 +293,11 @@ function storeFor(userId: string, box: { conf: unknown; reuse?: boolean } = { co
         return out;
       });
     },
+    async plateCards() {
+      const filter = encodeURIComponent('(data->>thumbnail.is.null,data->>thumbnail.like.data:image*)');
+      const checked = encodeURIComponent('(data->>pictureCheck.is.null,data->>pictureCheck.neq.2)');
+      return cardRows((cols) => rows(`cards?user_id=${me}&or=${filter}&and=(or${checked})&${cols}&limit=120`));
+    },
     async specialCards() {
       return cardRows((cols) => allRows(`cards?user_id=${me}&article_key=like.${encodeURIComponent('special:*')}&${cols}`));
     },
@@ -518,6 +523,7 @@ Deno.serve(async (req: Request) => {
       draw: (pack: unknown, options?: Record<string, unknown>) => drawArticles(pack, options),
       drawMany: (pack: unknown, n: number, options?: Record<string, unknown>) => drawArticlesMany(pack, n, options),
       titleCards: (wants: unknown[], pack: Record<string, unknown>) => titleCards(wants, pack),
+      findPictures: (pages: unknown[], options: Record<string, unknown>) => findPictures(pages, options),
       warmCustom: (pack: unknown) => later(language.run(lang, () => warmCustomPool(pack))),
       articleText: (title: string) => fetchArticleText(title, { limit: 3500 }),
       findWiki: (q: string, options: Record<string, unknown> = {}) => findWikis(q, { lang, fandom: true, ...options }),
