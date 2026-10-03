@@ -53,7 +53,7 @@ Only when the task needs them:
 ## Recipes
 
 - New text on screen: add the key to `src/i18n.js` and the same key to `src/i18n-fr.js` (real French, not a copy). `npm run check` fails if one is missing.
-- Any UI change: do it for the phone layout (`src/app`) and check the PC layout (`src/pc`) too; run `pc`, `fit` and `browsers`.
+- Any UI change: do it for the phone layout (`src/app`) and check the PC layout (`src/pc`) too; run `pc`, `fit`, `centering` and `browsers`. `centering` (and every PC screen in `fit`) fails when something sits off center (`tests/lib/centering.mjs`).
 - Economy change: edit `src/econ/*`, then `node tools/build-economy.mjs`, run `economy`, `gifts`, `clubs` and the unit tests. If it needs a table or RPC, add it to `supabase/schema.sql` idempotently, add a check in `tests/sql/`, and tell Gabriel to re-run the schema. Server-only actions belong in `SERVER_ONLY` in `src/econ/local.js`.
 - New booster theme: `src/data/packs.js` (name in en and fr), check art and odds, run `product` and `app`.
 - Player-facing release: add an entry to `src/data/releases.js` so the Updates screen shows it.
@@ -159,7 +159,7 @@ Only when the task needs them:
 ## Tests
 
 - `npm run check`: i18n check, sweep (secrets, em dashes and similar), unit tests, typecheck.
-- `node tests/run.mjs [suite...]`: Playwright suites against an offline build or a Supabase stub (`tests/lib/supastub.mjs`). All 48 must pass before pushing (`slow` holds every REST call 3 s and checks taps still answer within 300 ms). Suites run in parallel (up to 8 at a time, half the cores; `TEST_JOBS=1` for one at a time), about 4 minutes for all of them on the dev machine.
+- `node tests/run.mjs [suite...]`: Playwright suites against an offline build or a Supabase stub (`tests/lib/supastub.mjs`). All 49 must pass before pushing (`slow` holds every REST call 3 s and checks taps still answer within 300 ms). Suites run in parallel (up to 8 at a time, half the cores; `TEST_JOBS=1` for one at a time), about 4 minutes for all of them on the dev machine.
 - `browsers` and `browsersguest` walk every tab in Chromium, Firefox and WebKit (iPhone, iPhone landscape, Mac) on CI; locally only Chromium is installed.
 - The stub can play a creator account (`db.creators`) and applies PostgREST filters through `filtered()`.
 - `tests/sql/run.mjs` needs `WIKSTER_PG` (Docker needs the docker group; without it, run the same files in PGlite); Control's gate test is `test/run.sh` with a local Postgres 16.

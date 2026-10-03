@@ -2,6 +2,7 @@ import { chromium, devices } from 'playwright';
 import { launchOptions } from '../lib/browser.mjs';
 import { installStubs } from '../lib/stubs.mjs';
 import { installSupabase, newDatabase, recoveryLink } from '../lib/supastub.mjs';
+import { centerAudit } from '../lib/centering.mjs';
 
 let fails = 0;
 const check = (l, c, e = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${e ? '  ' + e : ''}`); };
@@ -256,6 +257,41 @@ const wide = await small.evaluate(() => document.documentElement.scrollWidth);
 check('a small phone shows it without sideways scroll', wide <= 320, String(wide));
 await small.context().close();
 await phone.context().close();
+
+section('every sign in card is centered');
+{
+  const sizes = [
+    ['phone', devices['Pixel 7']],
+    ['landscape', { viewport: { width: 915, height: 412 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }],
+    ['pc', PC],
+    ['pc big text', PC, 1.4]
+  ];
+  for (const [label, layout, scale] of sizes) {
+    for (const lang of ['en', 'fr']) {
+      const fresh = (tag) => device(`center ${label} ${lang} ${tag}`, { lang, layout, init: scale ? `localStorage.setItem('wikster.uiScale.v1', '${scale}')` : null });
+      let page = await fresh('gate');
+      const card = async (state) => {
+        await page.waitForTimeout(400);
+        const off = await page.evaluate(centerAudit, '#gate:not([hidden]) .gate-card');
+        check(`${label} ${lang} ${state}: nothing in the card is off center`, off.length === 0, off.slice(0, 4).join(' | '));
+      };
+      await open(page);
+      await page.waitForTimeout(800);
+      if (label.startsWith('pc')) check(`${label} ${lang}: the PC layout is on`, await page.evaluate(() => document.documentElement.classList.contains('is-pc')));
+      await card('sign in');
+      await page.locator('#gate-seg .seg-option[data-value="signup"]').click();
+      await card('create account');
+      await askReset(page, EMAIL);
+      await card('forgot password');
+      await page.context().close();
+      page = await fresh('link');
+      await open(page, recoveryLink(db, EMAIL, BASE));
+      await until(async () => (await page.locator('#gate-form input[type="password"]').count()) >= 2);
+      await card('new password');
+      await page.context().close();
+    }
+  }
+}
 
 console.log(errors.length ? `\npage errors:\n${errors.join('\n')}` : '\nno page errors');
 console.log(fails ? `\n${fails} FAILURES` : '\nALL PASS');
