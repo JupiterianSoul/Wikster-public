@@ -23,7 +23,22 @@ const versionFile = () => ({
   }
 });
 
-const INTRO_LOOKS = Object.fromEntries(THEMES.map((theme) => [theme.id, [theme.swatch[0].slice(0, 7), theme.motion.scale, theme.motion.ease, theme.motion.pop]]));
+const THEME_CSS = readFileSync(fileURLToPath(new URL('./src/styles/themes.css', import.meta.url)), 'utf8');
+
+function themeVars(id) {
+  const at = THEME_CSS.indexOf(`[data-theme='${id}'] {`);
+  if (at < 0) return {};
+  const block = THEME_CSS.slice(at, THEME_CSS.indexOf('\n}', at));
+  const vars = {};
+  for (const m of block.matchAll(/^\s*(--(?:accent|accent-2|font|font-display)):\s*([^;]+);/gm)) vars[m[1]] = m[2].trim();
+  if (vars['--font-display'] === 'var(--font)') vars['--font-display'] = vars['--font'];
+  return vars;
+}
+
+const INTRO_LOOKS = Object.fromEntries(THEMES.map((theme) => {
+  const v = themeVars(theme.id);
+  return [theme.id, [theme.swatch[0].slice(0, 7), theme.motion.scale, theme.motion.ease, theme.motion.pop, v['--accent'] ?? null, v['--accent-2'] ?? null, v['--font'] ?? null, v['--font-display'] ?? v['--font'] ?? null]];
+}));
 
 const logoInHtml = () => ({
   name: 'wikster-logo-html',
