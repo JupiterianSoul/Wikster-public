@@ -6,6 +6,9 @@ import { fetchTopRead } from './fetch.js';
 import { TODAY_POOL, todayRarityForRank } from '../economy.js';
 import { cardAllowed } from './safety.js';
 import { drawFromPool } from './pool.js';
+import { safeDraws } from './safe.js';
+
+export { useSafeDraws } from './safe.js';
 
 export const REQUEST_TIMEOUT_MS = 7000;
 
@@ -129,12 +132,6 @@ export function encodeTitle(title) {
   return (encodeURIComponent(title.replace(/ /g, '_')).replace(/%2F/gi, '%252F'));
 }
 
-let safeDefault = () => false;
-
-export function useSafeDraws(fn) {
-  safeDefault = typeof fn === 'function' ? fn : () => false;
-}
-
 async function drawOnce(pack, options) {
   if (pack.source === 'titles') return drawTitleSet(pack);
   if (pack.source === 'today') return drawTodaySet(pack);
@@ -145,7 +142,7 @@ async function drawOnce(pack, options) {
 export async function drawArticles(pack, options = {}) {
   const started = Date.now();
   takeRequestCount();
-  const safe = pack.safe === true || Boolean(safeDefault());
+  const safe = pack.safe === true || safeDraws();
   try {
     const first = await drawOnce(pack, options);
     if (!Array.isArray(first)) return first;
@@ -187,7 +184,7 @@ export async function drawArticlesMany(pack, n, options = {}) {
   const count = Math.max(1, Math.floor(Number(n) || 1));
   const started = Date.now();
   takeRequestCount();
-  const safe = pack.safe === true || Boolean(safeDefault());
+  const safe = pack.safe === true || safeDraws();
   try {
     const pooled = await drawFromPool(pack, count, { safe, random: options.random, user: options.user ?? null, live: options.poolOnly ? null : (m) => drawManyOnce(pack, m, options) });
     if (pooled) return pooled.map((set) => set.filter((card) => cardAllowed(card, { safe }))).filter((set) => set.length);

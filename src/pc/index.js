@@ -1,3 +1,4 @@
+import '../styles/pc-layer.css';
 import './home.js';
 import './boosters.js';
 import './custom.js';

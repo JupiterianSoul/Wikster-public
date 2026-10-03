@@ -7,7 +7,8 @@ import { proceduralStyle } from '../packstyle.js';
 import { monogramSvg } from '../data/emblems.js';
 import { press } from '../ui/components.js';
 import { synth } from '../ui/sound.js';
-import { biggestIndex, findKey, findWikis, foldName, formatPages, pageCount } from '../wiki/finder.js';
+import { biggestIndex, findKey, foldName, formatPages, pageCount } from '../wiki/names.js';
+import { findWikis } from '../wiki/lazy.js';
 import { MAX_TIMED_LEVEL, TIMED_CARDS, accrue, levelBounds, levelProgress, maxHeld, msToNext, regenMs, timedLevel, timedSpec, timedTopTier } from '../timed.js';
 import { RARITIES } from '../data/rarities.js';
 import { formatCountdown } from '../shop.js';
@@ -23,7 +24,7 @@ import { minorsText, minorsWiki } from '../wiki/safety.js';
 import { holdMerged, spentList, takeParts } from './ready.js';
 import { screenText } from '../wordfilter.js';
 import { updateBadges } from './regalia.js';
-import { payStipend, renderShop } from './shop.js';
+import { payStipend, renderShop } from './stipend.js';
 import { keeper } from './keep.js';
 
 export function buildBooster(spec, { interactive = false, size = '' } = {}) {

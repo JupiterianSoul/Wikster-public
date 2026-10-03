@@ -10,15 +10,12 @@ import * as store from '../collection.js';
 import { questUserKey, renderGames } from './arcade.js';
 import { renderBinder } from './binder.js';
 import { el, esc, navTabFor, openSheet, placeDrawerLinks, plainText, showScreen, state } from './core.js';
-import { openDaily } from './daily.js';
 import { userId } from './gate.js';
 import { live } from './live.js';
 import { showPacks, renderTimed } from './packs.js';
 import { renderProfile } from './profile.js';
-import { renderLeaderboard, renderQuests } from './quests.js';
-import { achRedeemableCount, renderAchievements, renderBadgesScreen } from './regalia.js';
-import { renderCustomize, renderSettings } from './settings.js';
-import { payStipend, showShop } from './shop.js';
+import { achRedeemableCount } from './regalia.js';
+import { payStipend, showShop } from './stipend.js';
 import { loadFriends, renderFriends } from './social.js';
 import { friendsBadge, inboxCounts, openTarget, paintBadge, waitingChallenges } from './inbox.js';
 import { isBlocked } from './safety.js';
@@ -56,22 +53,22 @@ export function drawerItems() {
     { id: 'cardindex', icon: 'search',  key: 'tabIndex',       run: go('cardindex', lazy(() => import('./cardindex.js'), 'renderCardIndex')) },
     { id: 'glossary', icon: 'filter',   key: 'tabGlossary',    run: go('glossary', lazy(() => import('./cardindex.js'), 'renderGlossary')) },
     { id: 'daily',  icon: 'gift',       key: 'dailyTitle', dot: () => canClaim(state.profile.daily),
-      run: () => openDaily() },
+      run: () => import('./daily.js').then((m) => m.openDaily()) },
     { id: 'ach',    icon: 'trophy',     key: 'achTitle',
       badge: () => achRedeemableCount(),
-      run: go('ach', renderAchievements) },
-    { id: 'badges', icon: 'star',       key: 'badgesTitle',    run: go('badges', renderBadgesScreen) },
+      run: go('ach', lazy(() => import('./honours.js'), 'renderAchievements')) },
+    { id: 'badges', icon: 'star',       key: 'badgesTitle',    run: go('badges', lazy(() => import('./honours.js'), 'renderBadgesScreen')) },
     { id: 'quiz',   icon: 'quiz',       key: 'tabQuiz',        run: go('quiz', lazy(() => import('./quiz.js'), 'renderQuiz')) },
     { id: 'games',  icon: 'dice',       key: 'tabGames', kind: 'versus',
       badge: () => waitingChallenges().length,
       run: go('games', renderGames) },
     { id: 'quests', icon: 'scroll',     key: 'tabQuests',
       badge: () => quests.claimableCount(questUserKey()),
-      run: go('quests', renderQuests) },
+      run: go('quests', lazy(() => import('./quests.js'), 'renderQuests')) },
     { id: 'season', icon: 'calendar', key: 'tabSeason',
       dot: () => claimableTiers(state.profile) > 0,
       run: go('season', lazy(() => import('./season.js'), 'renderSeason')) },
-    { id: 'leaderboard', icon: 'podium', key: 'tabLeaderboard', run: go('leaderboard', renderLeaderboard) },
+    { id: 'leaderboard', icon: 'podium', key: 'tabLeaderboard', run: go('leaderboard', lazy(() => import('./quests.js'), 'renderLeaderboard')) },
     ...(account.configured
       ? [{ id: 'guilds', icon: 'shield', key: 'tabGuilds', kind: 'social',
            badge: () => inboxCounts().guild,
@@ -91,9 +88,9 @@ export function drawerItems() {
       run: () => openNotifications() },
     { id: 'profile',  icon: 'profile',  key: 'tabProfile',  run: go('profile', renderProfile) },
     { id: 'updates',   icon: 'spark',    key: 'tabUpdates',   run: go('updates', lazy(() => import('./updates.js'), 'renderUpdates')) },
-    { id: 'customize', icon: 'wand',     key: 'tabCustomize', run: go('customize', renderCustomize) },
+    { id: 'customize', icon: 'wand',     key: 'tabCustomize', run: go('customize', lazy(() => import('./settings.js'), 'renderCustomize')) },
     { id: 'atelier', icon: 'ink',        key: 'tabAtelier',   run: go('atelier', lazy(() => import('./atelier.js'), 'renderAtelier')) },
-    { id: 'settings',  icon: 'settings', key: 'tabSettings',  run: go('settings', renderSettings) }
+    { id: 'settings',  icon: 'settings', key: 'tabSettings',  run: go('settings', lazy(() => import('./settings.js'), 'renderSettings')) }
   ];
 }
 

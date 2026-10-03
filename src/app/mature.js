@@ -8,7 +8,7 @@ import { esc, openSheet, settings, state, toast } from './core.js';
 import { live } from './live.js';
 import { isMature } from '../sensitive.js';
 import { androidApp } from '../platform.js';
-import { useSafeDraws } from '../wiki/core.js';
+import { useSafeDraws } from '../wiki/safe.js';
 import { minorsWiki } from '../wiki/safety.js';
 
 export const sessionUser = () => state.account?.session?.user ?? null;

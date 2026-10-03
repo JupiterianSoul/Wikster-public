@@ -1902,7 +1902,7 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'messages', 'guild_messages', 'auctions', 'trades', 'deliveries',
+    'guild_messages', 'auctions', 'trades', 'deliveries',
     'guilds', 'guild_invites', 'showcase_kudos', 'challenges', 'scores'
   ]
   loop
@@ -2715,6 +2715,8 @@ declare
   n text := public.text_norm(p_text);
   s text;
   hits text[];
+  n_words text;
+  s_words text;
 begin
   if 'contact' = any(tiers) then
     if raw ~ '(https?://|www\.)'
@@ -2726,15 +2728,20 @@ begin
     end if;
   end if;
   s := regexp_replace(n, '(.)\1+', '\1', 'g');
+  n_words := array_to_string(array_remove(regexp_split_to_array(n, '[^a-z]+'), ''), ' ');
+  s_words := case when s = n then null else array_to_string(array_remove(regexp_split_to_array(s, '[^a-z]+'), ''), ' ') end;
   select coalesce(array_agg(distinct b.tier), '{}') into hits
-    from public.blocked_terms b, (values (n, false), (s, true)) v(t, single)
-    where b.tier = any(tiers)
-      and (not v.single or b.term !~ '(.)\1')
-      and case b.mode
-        when 'any' then position(b.term in regexp_replace(v.t, '[^a-z]', '', 'g')) > 0
-        else exists (
-          select 1 from regexp_split_to_table(v.t, '[^a-z]+') w
-          where w <> '' and (w = b.term or (b.mode = 'word' and length(b.term) >= 5 and left(w, length(b.term)) = b.term)))
+    from public.blocked_terms b,
+      (values (replace(n_words, ' ', ''), ' ' || n_words || ' ', false), (replace(s_words, ' ', ''), ' ' || s_words || ' ', true)) v(letters, spaced, single)
+    where b.tier = any(tiers) and v.letters is not null
+      and case
+        when not case b.mode
+          when 'any' then position(b.term in v.letters) > 0
+          else b.term <> '' and position(' ' in b.term) = 0 and (position(' ' || b.term || ' ' in v.spaced) > 0
+            or (b.mode = 'word' and length(b.term) >= 5 and position(' ' || b.term in v.spaced) > 0))
+          end then false
+        when v.single then b.term !~ '(.)\1'
+        else true
       end;
   if hits && array['slur', 'sexual', 'profanity'] then return 'WORD'; end if;
   if 'reserved' = any(hits) then return 'RESERVED'; end if;
@@ -2802,9 +2809,31 @@ begin
   return new;
 end $$;
 
+create or replace function public.chat_guard()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+declare me uuid := auth.uid(); n_minute integer; n_day integer;
+begin
+  if public.is_control_admin(me) then return new; end if;
+  if me is not null then
+    if public.is_muted(me) then raise exception 'this account is muted' using errcode = 'check_violation'; end if;
+    select count(*) filter (where x.created_at > now() - interval '1 minute'), count(*) into n_minute, n_day
+      from (select m.created_at from public.messages m
+        where m.sender = me and m.created_at > now() - interval '1 day'
+        order by m.created_at desc limit 1500) x;
+    if n_minute >= 20 or n_day >= 1500 then raise exception 'SLOW_DOWN'; end if;
+  end if;
+  if public.text_flag(new.body, 'chat') is not null then raise exception 'FILTERED' using errcode = 'check_violation'; end if;
+  return new;
+end $$;
+revoke all on function public.chat_guard() from public, anon, authenticated;
+
 drop trigger if exists refuse_filtered_chat on public.messages;
-create trigger refuse_filtered_chat before insert on public.messages
-  for each row execute function public.refuse_filtered_chat();
+drop trigger if exists refuse_if_suspended on public.messages;
+drop trigger if exists rate_messages_minute on public.messages;
+drop trigger if exists rate_messages_day on public.messages;
+drop trigger if exists chat_guard on public.messages;
+create trigger chat_guard before insert on public.messages
+  for each row execute function public.chat_guard();
 drop trigger if exists refuse_filtered_chat on public.guild_messages;
 create trigger refuse_filtered_chat before insert on public.guild_messages
   for each row execute function public.refuse_filtered_chat();
@@ -3064,8 +3093,6 @@ do $$
 declare spec text[];
 begin
   foreach spec slice 1 in array array[
-    array['messages', 'rate_messages_minute', 'message', '20', '60'],
-    array['messages', 'rate_messages_day', 'message-day', '1500', '86400'],
     array['guild_messages', 'rate_guild_messages_minute', 'guild-message', '20', '60'],
     array['guild_messages', 'rate_guild_messages_day', 'guild-message-day', '1500', '86400'],
     array['friendships', 'rate_friend_requests', 'friend-request', '40', '86400'],
@@ -3088,7 +3115,11 @@ create trigger rate_renames before update of username on public.profiles
   execute function public.rate_guard_rename();
 
 select cron.unschedule(jobid) from cron.job where jobname = 'wikster-rate-sweep';
-select cron.schedule('wikster-rate-sweep', '17 3 * * *', $$delete from public.rate_counters where window_start < now() - interval '2 days'$$);
+select cron.schedule('wikster-rate-sweep', '17 3 * * *', $$
+  set local statement_timeout = '60s';
+  set local lock_timeout = '5s';
+  delete from public.rate_counters where window_start < now() - interval '2 days';
+$$);
 
 create table if not exists public.blocked_hosts (
   host       text primary key check (host = lower(host) and char_length(host) between 3 and 253),
@@ -3240,6 +3271,8 @@ create table if not exists public.wiki_pool (
 );
 alter table public.wiki_pool enable row level security;
 create index if not exists wiki_pools_used_idx on public.wiki_pools (used_at);
+alter table public.wiki_pools add column if not exists asked_at timestamptz;
+create index if not exists wiki_pools_asked_idx on public.wiki_pools (asked_at) where asked_at is not null;
 
 drop function if exists public.wiki_pool_draw(text, integer, integer, integer, text);
 create or replace function public.wiki_pool_draw(p_pool text, p_n integer, p_low integer default 120, p_stale integer default 21600, p_kind text default 'wiki',
@@ -3271,13 +3304,15 @@ begin
     into cards, fresh from picked x;
   select * into m from wiki_pools where pool = p_pool;
   if not found then
-    insert into wiki_pools (pool, kind, refill_after) values (p_pool, coalesce(p_kind, 'wiki'), now() + interval '3 minutes')
+    insert into wiki_pools (pool, kind, refill_after, asked_at) values (p_pool, coalesce(p_kind, 'wiki'), now() + interval '3 minutes', now())
       on conflict (pool) do nothing;
     due := found;
   elsif (coalesce(p_rotate, false) or m.size < coalesce(p_low, 0)
          or (coalesce(p_stale, 0) > 0 and (m.fetched_at is null or m.fetched_at < now() - make_interval(secs => p_stale))))
-        and (m.refill_after is null or m.refill_after < now()) then
-    update wiki_pools set refill_after = now() + interval '3 minutes', used_at = now()
+        and (m.refill_after is null or m.refill_after < now())
+        and (m.size < greatest(coalesce(p_low, 0), 1)
+             or (select count(*) from wiki_pools q where q.asked_at > now() - interval '3 minutes' and q.pool <> p_pool) < 2) then
+    update wiki_pools set refill_after = now() + interval '3 minutes', used_at = now(), asked_at = now()
       where pool = p_pool and (refill_after is null or refill_after < now());
     due := found;
   elsif m.used_at < now() - interval '1 hour' then
@@ -3302,14 +3337,15 @@ begin
       from jsonb_array_elements(case when jsonb_typeof(p_cards) = 'array' then p_cards else '[]'::jsonb end) c
       where coalesce(c->>'key', '') <> '' and char_length(c->>'key') <= 300 and octet_length(c::text) <= 4000
       limit 600
-    on conflict (pool, key) do update set card = excluded.card, at = now();
+    on conflict (pool, key) do update
+      set card = case when wiki_pool.card = excluded.card then wiki_pool.card else excluded.card end, at = now();
   delete from wiki_pool w
     where w.pool = p_pool
       and w.key in (select key from wiki_pool where pool = p_pool order by at desc, random() offset greatest(1, least(coalesce(p_max, 300), 1500)));
   select count(*) into n from wiki_pool where pool = p_pool;
   update wiki_pools
     set refill_after = now() + case when n - size < 16 then interval '6 hours' else interval '10 minutes' end,
-        size = n, fetched_at = now(), fails = 0, used_at = now()
+        size = n, fetched_at = now(), fails = 0, used_at = now(), asked_at = null
     where pool = p_pool;
   select coalesce(sum(size), 0) into total from wiki_pools;
   while total > greatest(100, coalesce(p_total, 20000)) loop
@@ -3331,7 +3367,8 @@ returns void language plpgsql security definer set search_path = public as $$
 begin
   update wiki_pools
     set fails = least(fails + 1, 8),
-        refill_after = now() + make_interval(secs => least(3600, 60 * power(2, least(fails, 6))::integer))
+        refill_after = now() + make_interval(secs => least(3600, 60 * power(2, least(fails, 6))::integer)),
+        asked_at = null
     where pool = p_pool;
 end $$;
 revoke all on function public.wiki_pool_fail(text) from public, anon, authenticated;
@@ -3339,19 +3376,22 @@ grant execute on function public.wiki_pool_fail(text) to service_role;
 
 create or replace function public.wiki_pool_release(p_pool text)
 returns void language sql security definer set search_path = public as $$
-  update wiki_pools set refill_after = null where pool = p_pool and refill_after > now();
+  update wiki_pools set refill_after = null, asked_at = null where pool = p_pool and refill_after > now();
 $$;
 revoke all on function public.wiki_pool_release(text) from public, anon, authenticated;
 grant execute on function public.wiki_pool_release(text) to service_role;
 
 select cron.unschedule(jobid) from cron.job where jobname = 'wikster-retention';
 select cron.schedule('wikster-retention', '37 3 * * *', $$
+  set local statement_timeout = '60s';
+  set local lock_timeout = '5s';
   delete from public.filter_hits where at < now() - interval '90 days';
   delete from public.reports where status <> 'open' and handled_at < now() - interval '365 days';
   delete from public.draw_pool where at < now() - interval '30 days';
-  delete from public.wiki_pools where used_at < now() - case when kind = 'custom' then interval '7 days' else interval '30 days' end;
-  delete from public.pulls p where p.claimed_at is null and p.at < now() - interval '30 days'
-    and not exists (select 1 from public.inventory i where i.user_id = p.user_id and i.spec_id = p.spec_id);
+  delete from public.wiki_pools where pool in (select pool from public.wiki_pools
+    where used_at < now() - case when kind = 'custom' then interval '7 days' else interval '30 days' end order by used_at limit 40);
+  delete from public.pulls where nonce in (select p.nonce from public.pulls p where p.claimed_at is null and p.at < now() - interval '30 days'
+    and not exists (select 1 from public.inventory i where i.user_id = p.user_id and i.spec_id = p.spec_id) limit 5000);
 $$);
 
 do $$ begin create extension if not exists pg_net; exception when others then raise notice 'pg_net is not available here'; end $$;
@@ -3780,7 +3820,11 @@ end $$;
 revoke all on function public.thin_save_history() from public, anon, authenticated;
 
 select cron.unschedule(jobid) from cron.job where jobname = 'wikster-save-thin';
-select cron.schedule('wikster-save-thin', '27 3 * * *', $$select public.thin_save_history()$$);
+select cron.schedule('wikster-save-thin', '27 3 * * *', $$
+  set local statement_timeout = '60s';
+  set local lock_timeout = '5s';
+  select public.thin_save_history();
+$$);
 
 create or replace function public.sync_me(
   p_patch jsonb default '{}'::jsonb,
@@ -4002,6 +4046,14 @@ exception when others then
 end $$;
 revoke all on function public.live_send(text, text, jsonb) from public, anon, authenticated;
 
+create or replace function public.chat_announced()
+returns boolean language plpgsql stable set search_path = public, pg_temp as $$
+begin
+  return coalesce(nullif(current_setting('request.headers', true), '')::json ->> 'x-wikster-chat', '') = 'inbox';
+exception when others then
+  return false;
+end $$;
+
 create or replace function public.live_row()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
@@ -4070,7 +4122,7 @@ begin
 end $$;
 
 drop trigger if exists live_row on public.messages;
-create trigger live_row after insert on public.messages for each row execute function public.live_row();
+create trigger live_row after insert on public.messages for each row when (not public.chat_announced()) execute function public.live_row();
 drop trigger if exists live_read on public.messages;
 create trigger live_read after update on public.messages referencing old table as live_stale new table as live_fresh
   for each statement execute function public.live_read();
@@ -4486,10 +4538,14 @@ update public.econ e set n_cards = 0, n_unique = 0, n_value = 0
     and not exists (select 1 from public.cards c where c.user_id = e.user_id);
 
 select cron.unschedule(jobid) from cron.job where jobname = 'wikster-econ-tidy';
-select cron.schedule('wikster-econ-tidy', '27 3 * * *', $$
-  delete from public.pulls where claimed_at is not null and claimed_at < now() - interval '14 days';
+select cron.schedule('wikster-econ-tidy', '7 4 * * *', $$
+  set local statement_timeout = '120s';
+  set local lock_timeout = '5s';
+  delete from public.pulls where nonce in (select nonce from public.pulls
+    where claimed_at is not null and claimed_at < now() - interval '14 days' limit 20000);
   delete from public.cards_gone where at < now() - interval '30 days';
-  select public.econ_recount(e.user_id) from public.econ e where e.updated_at > now() - interval '1 day';
+  select public.econ_recount(x.user_id) from (select e.user_id from public.econ e
+    where e.updated_at > now() - interval '1 day' order by e.updated_at desc limit 2000) x;
 $$);
 
 drop function if exists public.econ_load(uuid, text, integer);
@@ -4676,17 +4732,49 @@ create policy "anyone reads a live announcement meant for everyone"
     and target_guild is null
   );
 
+create or replace function public.inbox_writable(p_topic text)
+returns boolean language plpgsql stable security definer set search_path = public, pg_temp as $$
+declare me uuid := auth.uid();
+begin
+  if me is null or p_topic is null
+     or p_topic !~ '^inbox:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    return false;
+  end if;
+  return public.are_friends(me, substr(p_topic, 7)::uuid) and not public.is_muted(me);
+end $$;
+revoke all on function public.inbox_writable(text) from public, anon;
+grant execute on function public.inbox_writable(text) to authenticated;
+
 do $$ begin
   if to_regclass('realtime.messages') is not null then
     execute 'drop policy if exists "wikster live topics" on realtime.messages';
     execute $p$create policy "wikster live topics" on realtime.messages for select to authenticated
       using (extension = 'broadcast' and (
         (select realtime.topic()) = 'user:' || (select auth.uid())::text
+        or (select realtime.topic()) = 'inbox:' || (select auth.uid())::text
         or (select realtime.topic()) = 'guild:' || (select public.my_guild_id())::text
         or (select realtime.topic()) = 'market'
         or (select realtime.topic()) = 'world'))$p$;
+    execute 'drop policy if exists "wikster friends announce chat" on realtime.messages';
+    execute $p$create policy "wikster friends announce chat" on realtime.messages for insert to authenticated
+      with check (extension = 'broadcast' and (select public.inbox_writable((select realtime.topic()))))$p$;
   end if;
 end $$;
+
+create or replace function public.message_live(p_id uuid)
+returns boolean language plpgsql security definer set search_path = public as $$
+declare me uuid := auth.uid(); r messages;
+begin
+  if me is null then return false; end if;
+  select * into r from messages m where m.id = p_id and m.sender = me and m.read_at is null
+    and m.created_at > now() - interval '10 minutes';
+  if not found then return false; end if;
+  perform public.rate_limit(me, 'message-live', 30, 60);
+  perform live_send('user:' || r.recipient, 'message', jsonb_build_object('type', 'INSERT', 'row', to_jsonb(r)));
+  return true;
+end $$;
+revoke all on function public.message_live(uuid) from public, anon;
+grant execute on function public.message_live(uuid) to authenticated;
 
 create or replace function public.live_grants()
 returns trigger language plpgsql security definer set search_path = public as $$
@@ -6744,7 +6832,10 @@ begin
       v_api := public.admin_str(p_spec->'wiki'->'apiUrl', 300);
       if coalesce(v_api, '') !~ '^https?://[^/[:space:]]+/' then raise exception 'BAD_SPEC'; end if;
       v_out := v_out || jsonb_build_object('wiki', jsonb_strip_nulls(jsonb_build_object('apiUrl', v_api,
-        'sitename', public.admin_str(p_spec->'wiki'->'sitename', 120))));
+        'sitename', public.admin_str(p_spec->'wiki'->'sitename', 120),
+        'topic', public.admin_str(p_spec->'wiki'->'topic', 80),
+        'lang', case when coalesce(public.admin_str(p_spec->'wiki'->'lang', 12), '') ~ '^[a-z-]{2,12}$' then public.admin_str(p_spec->'wiki'->'lang', 12) end,
+        'mature', case when p_spec->'wiki'->'mature' = 'true'::jsonb then true end)));
     elsif coalesce(jsonb_typeof(p_spec->'wiki'), 'null') <> 'null' or public.admin_str(p_spec->'customId', 120) is null then
       raise exception 'BAD_SPEC';
     end if;
@@ -8808,6 +8899,7 @@ begin
 
   perform set_config('wikster.tally', '', true);
   return jsonb_build_object('coins', coalesce(w.coins, 0), 'ink', coalesce(w.ink, 0), 'removed', removed,
+    'totals', (select jsonb_build_object('cards', e.n_cards, 'unique', e.n_unique) from econ e where e.user_id = p_user),
     'fresh', jsonb_build_object(
       'state', coalesce((select e.state from econ e where e.user_id = p_user), '{}'::jsonb),
       'inventory', coalesce((select jsonb_object_agg(i.spec_id, jsonb_build_object('spec', i.spec, 'count', i.count)) from inventory i where i.user_id = p_user), '{}'::jsonb),
@@ -8849,7 +8941,8 @@ begin
     'inventory', coalesce((select jsonb_object_agg(i.spec_id, jsonb_build_object('spec', i.spec, 'count', i.count)) from inventory i where i.user_id = p_user), '{}'::jsonb),
     'custom', coalesce((select jsonb_agg(jsonb_build_object('def', k.def) order by k.created_at) from custom_packs k where k.user_id = p_user), '[]'::jsonb),
     'cutover', (select extract(epoch from m.cutover_at) * 1000 from migration m limit 1),
-    'born', (select extract(epoch from u.created_at) * 1000 from auth.users u where u.id = p_user));
+    'born', (select extract(epoch from u.created_at) * 1000 from auth.users u where u.id = p_user),
+    'totals', (select jsonb_build_object('cards', e.n_cards, 'unique', e.n_unique) from econ e where e.user_id = p_user));
   if cardinality(want) > 0 then
     result := result || jsonb_build_object('keys', to_jsonb(want), 'cards', coalesce((select jsonb_agg(public.econ_card_json(c2))
       from cards c2 where c2.user_id = p_user and c2.article_key = any(want)), '[]'::jsonb));
@@ -9566,8 +9659,16 @@ begin
   end loop;
 end $$;
 
-select cron.schedule('wikster-market', '* * * * *', $$select public.market_sweep(200)$$);
-select cron.schedule('wikster-market-tidy', '41 3 * * *', $$delete from public.auctions where status <> 'open' and coalesce(settled_at, ends_at) < now() - interval '120 days'$$);
+select cron.schedule('wikster-market', '* * * * *', $$
+  set local statement_timeout = '20s';
+  set local lock_timeout = '3s';
+  select public.market_sweep(200);
+$$);
+select cron.schedule('wikster-market-tidy', '41 3 * * *', $$
+  set local statement_timeout = '60s';
+  set local lock_timeout = '5s';
+  delete from public.auctions where status <> 'open' and coalesce(settled_at, ends_at) < now() - interval '120 days';
+$$);
 
 notify pgrst, 'reload schema';
 
@@ -10648,6 +10749,23 @@ begin
     with check (bucket_id = 'friend-pictures' and public.friend_pictures_writer())$q$;
   execute $q$create policy "control removes friend pictures" on storage.objects for delete to authenticated
     using (bucket_id = 'friend-pictures' and public.friend_pictures_writer())$q$;
+end $$;
+
+do $$
+declare spec text[];
+begin
+  foreach spec slice 1 in array array[
+    array['wiki_pool', 'card'], array['draw_pool', 'card'], array['pulls', 'cards'], array['pulls', 'spec'],
+    array['econ', 'state'], array['cards', 'data'], array['cards', 'prints'], array['inventory', 'spec'],
+    array['saves', 'data'], array['saves_history', 'data'], array['save_keys', 'value'], array['ledger', 'detail'],
+    array['card_pictures', 'extra'], array['wiki_finds', 'result'], array['wiki_sites', 'info'], array['custom_packs', 'def'],
+    array['auctions', 'card'], array['guild_bank', 'card'], array['deliveries', 'payload'],
+    array['profiles', 'showcase'], array['profiles', 'badges'], array['profiles', 'appearance'], array['profiles', 'stats']
+  ] loop
+    if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = spec[1] and column_name = spec[2]) then
+      execute format('alter table public.%I alter column %I set statistics 0', spec[1], spec[2]);
+    end if;
+  end loop;
 end $$;
 
 notify pgrst, 'reload schema';

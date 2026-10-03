@@ -1,5 +1,5 @@
 import { buildPackElement } from '../packview.js';
-import { playOpening } from './openfx.js';
+import { loadOpenFx } from './open.js';
 import { t, tx } from '../i18n.js';
 
 const SAMPLE = { kind: 'theme', themeId: 'animals', rarityId: null, cards: 5 };
@@ -68,6 +68,7 @@ export function openingPreview(id, { hold = null } = {}) {
     const root = document.createElement('div');
     root.className = 'ofx-preview-root';
     box.appendChild(root);
+    const { playOpening } = await loadOpenFx();
     await playOpening(id, { root, center: { x: w / 2, y: h / 2 }, pack, packW, packH: packW * 1.79, cards, targets, hold: hold ? hold() : null });
     for (const c of cards) {
       c.classList.add('is-up');

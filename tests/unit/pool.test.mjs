@@ -206,4 +206,12 @@ check('pools grow with the size of their source', poolSize(300) === 320 && poolS
 for (let i = 0; i < 700; i++) await drawFromPool({ ...pack, queries: [`many${i}`] }, 1, { random: seeded(i) });
 check('the per pool counters stay bounded', poolInternals.served.size <= 500, String(poolInternals.served.size));
 
+const { topReadDay } = await import('../../src/wiki/fetch.js');
+const noon = Date.parse('2026-10-03T12:00:00Z');
+check('a Today day not published yet reads the last published list', topReadDay('2026-10-03', noon) === '2026-10-02' && topReadDay('2026-10-09', noon) === '2026-10-02');
+check('a Today booster without a usable day reads the last published list', topReadDay(undefined, noon) === '2026-10-02' && topReadDay('3 oct', noon) === '2026-10-02');
+check('an older Today day keeps its own list', topReadDay('2026-09-28', noon) === '2026-09-28');
+const sent = await poolPlan({ name: 'today', cards: 5, source: 'today', day: new Date().toISOString().slice(0, 10) });
+check('a Today booster dated today shares the pool of the last published day', sent?.id?.endsWith(topReadDay(null)), sent?.id);
+
 done();

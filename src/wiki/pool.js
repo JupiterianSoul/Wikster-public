@@ -3,7 +3,7 @@ import { dealSets, gatherWikipedia, shuffled } from './draw.js';
 import { customPoolKey, gatherCustomFor, lookOf } from './custom.js';
 import { ACTION } from './core.js';
 import { findPictures, isTextArt, textPicture } from './art.js';
-import { fetchTopRead } from './fetch.js';
+import { fetchTopRead, topReadDay } from './fetch.js';
 import { titleCards } from './translate.js';
 import { cardAllowed } from './safety.js';
 import { isUsableText } from './filter.js';
@@ -129,7 +129,7 @@ async function customPlan(pack) {
 function todayPlan(pack) {
   const lang = wikiLang();
   return {
-    id: `td:${lang}:${pack.day}`,
+    id: `td:${lang}:${topReadDay(pack.day)}`,
     kind: 'today',
     max: TODAY_POOL,
     low: 1,
@@ -169,7 +169,7 @@ function titlesPlan(pack) {
 export async function poolPlan(pack) {
   if (!pack) return null;
   if (pack.source === 'custom') return customPlan(pack);
-  if (pack.source === 'today') return pack.day ? todayPlan(pack) : null;
+  if (pack.source === 'today') return todayPlan(pack);
   if (pack.source === 'titles') return titlesPlan(pack);
   if (!pack.source || pack.source === 'wikipedia') return wikipediaPlan(pack);
   return null;

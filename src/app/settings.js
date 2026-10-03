@@ -1,4 +1,3 @@
-import { pulse } from '../ui/native.js';
 import { adPrivacyOptions, adPrivacyRequired } from './support.js';
 import { aboutRows } from './about.js';
 import { LANGUAGES, getLanguage, t, tx } from '../i18n.js';
@@ -17,23 +16,23 @@ import { DEFAULT_FX, fxForRarity } from '../data/fx.js';
 import { ownsFrame, ownsFx, ownsLook, ownsOpening, ownsTheme } from '../ink.js';
 import * as account from '../account.js';
 import { copyText, describeSave, exportSave, importSave, parseSave, readText } from '../save.js';
-import { music } from '../ui/music.js';
 import { fill, h } from '../ui/dom.js';
-import { backdrop } from '../ui/backdrop.js';
 import { reportQuest } from './arcade.js';
 import { fxSampleCard } from './fxcard.js';
 import { renderBinder } from './binder.js';
-import { composedFriend, el, esc, money, openSheet, rememberLook, settings, showScreen, state, storedTheme, toast, useTheme } from './core.js';
+import { composedFriend, el, esc, money, openSheet, settings, showScreen, state, storedTheme, toast, useTheme } from './core.js';
 import { codeOfLook, friendDef, friendLookId, friendSpec } from '../friendcodes.js';
 import { friendThemeIds } from '../appearance.js';
 import { describeError, flushSync, leaveAccount, signedIn, syncSoon, syncTimer, userId } from './gate.js';
 import { live } from './live.js';
-import { openDanger, sayDangerNote } from './danger.js';
+import { openDanger } from './danger.js';
+import { applySettings, paintSyncLine, settingsRowButton, settingsRowShell } from './prefs.js';
 import { econ, econMessage, serverEconomy } from './econ.js';
 import { screenText } from '../wordfilter.js';
 import { buildBooster, renderCreator, renderPacks } from './packs.js';
-import { applyMatureLock, matureRow, noNsfwRow } from './mature.js';
-import { frameStage, frameStyle, pickFrameStyle, updateBadges, wearBadge } from './regalia.js';
+import { matureRow, noNsfwRow } from './mature.js';
+import { frameStage, frameStyle, pickFrameStyle, updateBadges } from './regalia.js';
+import { wearBadge } from './honours.js';
 import { renderShop } from './shop.js';
 import { openAvatarPicker, paintAvatarInto, settlePresence } from './social.js';
 import { askNotify, inWrapper, notifyState } from './notify.js';
@@ -697,26 +696,6 @@ export function wearFx(rarity, style) {
   import('./cardindex.js').then((m) => m.renderCardIndex());
 }
 
-export function settingsRowShell(titleKey, noteKey) {
-  const row = document.createElement('div');
-  row.className = 'row';
-  row.innerHTML = `<div class="row-copy"><h4></h4><p></p></div>`;
-  row.querySelector('h4').textContent = t(titleKey);
-  row.querySelector('p').textContent = t(noteKey);
-  return row;
-}
-
-export function settingsRowButton(row, label, run) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'btn btn-sm btn-ghost row-action';
-  btn.textContent = label;
-  press(btn, { sound: null });
-  btn.addEventListener('click', () => { synth.playTap(); run(btn); });
-  row.appendChild(btn);
-  return btn;
-}
-
 export function offlineAccountRow() {
   const row = document.createElement('div');
   row.className = 'row';
@@ -891,22 +870,6 @@ export function openUsernameChange() {
       }
     });
   });
-}
-
-export function paintSyncLine(row) {
-  const line = row?.querySelector('p');
-  if (!line) return;
-  if (state.account.syncing) { line.textContent = t('accountSyncing'); return; }
-  if (state.account.failed) { line.textContent = t('accountSyncFailed'); return; }
-  if (!state.account.syncedAt) { line.textContent = t('accountSyncNote'); return; }
-  const mins = Math.floor((Date.now() - state.account.syncedAt) / 60000);
-  line.textContent = t('accountSynced', {
-    when: mins < 1 ? t('accountJustNow') : t('accountMinsAgo', { n: mins })
-  });
-}
-
-export function renderAccountRow() {
-  return (paintSyncLine(el.dataList.querySelector('[data-account="sync"]')));
 }
 
 export function openTransfer() {
@@ -1084,47 +1047,6 @@ function backupRow(row) {
   return h('div.row', [h('div.row-copy', [h('h4', when), line]), btn]);
 }
 
-export const wipeEverything = () => openDanger('all');
-
-export const sayWipeNote = sayDangerNote;
-
-export function buzz(ms = 12, strength = Math.min(1, ms / 50)) {
-  if (settings().haptics === false) return;
-  pulse(ms, strength);
-}
-
-export let wakeLock = null;
-
-export async function holdWakeLock() {
-  if (settings().awake === false || wakeLock) return;
-  try {
-    wakeLock = await navigator.wakeLock?.request('screen') ?? null;
-    wakeLock?.addEventListener?.('release', () => { wakeLock = null; });
-  } catch {}
-}
-
-export function releaseWakeLock() {
-  try { wakeLock?.release?.(); } catch {}
-  wakeLock = null;
-}
-
-export function applySettings() {
-  const s = settings();
-  document.documentElement.dataset.lowpower = s.lowPower ? '1' : '0';
-  rememberLook({ lp: s.lowPower ? 1 : 0 });
-  document.documentElement.dataset.hints = s.hints ? '1' : '0';
-  document.documentElement.dataset.prices = s.prices === false ? '0' : '1';
-  document.documentElement.dataset.blurAdult = s.blurAdult ? '1' : '0';
-  applyMatureLock();
-  document.documentElement.dataset.rarityShapes = s.rarityShapes ? '1' : '0';
-  if (s.awake === false) releaseWakeLock();
-  synth.setMuted(!s.sound);
-  synth.setVolume(s.volume ?? 1);
-  music.setVolume(s.musicVolume ?? 0.4);
-  music.setOn(s.music !== false);
-  backdrop.setLowPower(s.lowPower);
-}
-
 export function sliderRow(key, titleKey, noteKey, { preview = null } = {}) {
   const row = document.createElement('div');
   row.className = 'row';
@@ -1198,3 +1120,5 @@ export function renderLookPicks() {
     return tile;
   }), ...(openings.length === 1 ? [moreTile(t('openingsMore'))] : []));
 }
+
+export { applySettings, buzz, holdWakeLock, paintSyncLine, releaseWakeLock, renderAccountRow, settingsRowButton, settingsRowShell } from './prefs.js';

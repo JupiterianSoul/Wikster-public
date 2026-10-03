@@ -2,10 +2,9 @@ import { SHOWCASE_MAX } from '../showcase.js';
 import { withSpecialPhoto } from '../codedefs.js';
 import { atMaxLevel, levelFraction, levelOf, rankFor, rewardForLevel, xpToNext } from '../progression.js';
 import { paintRingFace } from './social.js';
-import { frameTier } from '../frames.js';
+import { frameTier } from '../framemeta.js';
 import { t, tx } from '../i18n.js';
 import * as store from '../collection.js';
-import { evaluate as evaluateAchievements } from '../achievements.js';
 import * as account from '../account.js';
 import { RARITIES, rarityById, rarityOfCard, rarityRank, rarityText } from '../data/rarities.js';
 import { Bar } from '../ui/components.js';
@@ -17,10 +16,9 @@ import { buildStaticCard, openCardDetail } from './detail.js';
 import { signedIn, userId } from './gate.js';
 import { live } from './live.js';
 import { rewardCard } from './open.js';
-import { achFacts, frameStyle, paintFrameInto, renderBadges } from './regalia.js';
+import { frameStyle, loadHonours, paintFrameInto } from './regalia.js';
 import { ownAppearance, wearLook } from './lookview.js';
 import { markThumb } from './mature.js';
-import { paintOwnStatsBoard } from './statsboard.js';
 
 export function formatDuration(ms) {
   const minutes = Math.floor(ms / 60000);
@@ -62,14 +60,16 @@ export function renderProfile() {
   );
 
   paintShowcase();
-  renderBadges();
 
   el.statsLabel.textContent = t('profileStats');
   freshOwnStats();
   paintOwnStamp();
-  const facts = achFacts();
-  const achList = evaluateAchievements(facts, state.profile.achievements?.redeemed ?? []);
-  paintOwnStatsBoard(el.statGrid, { facts, achDone: achList.filter((a) => a.unlocked).length, achTotal: achList.length });
+  Promise.all([loadHonours(), import('./statsboard.js')]).then(([honours, board]) => {
+    honours.renderBadges();
+    const facts = honours.achFacts();
+    const achList = honours.evaluateAchievements(facts, state.profile.achievements?.redeemed ?? []);
+    board.paintOwnStatsBoard(el.statGrid, { facts, achDone: achList.filter((a) => a.unlocked).length, achTotal: achList.length });
+  }).catch(() => {});
 
   el.rarityLabel.textContent = t('statRarity');
   const peak = Math.max(1, ...RARITIES.map((r) => rarityCounts[r.id] ?? 0));

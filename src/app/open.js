@@ -4,7 +4,7 @@ import { synth } from '../ui/sound.js';
 import { Bar, dur, press, reveal, trackDrag } from '../ui/components.js';
 import * as store from '../collection.js';
 import { specColours, specIcon, specId, specName, toDrawPack } from '../booster.js';
-import { drawArticles } from '../wiki.js';
+import { drawArticles } from '../wiki/lazy.js';
 import { t, tx } from '../i18n.js';
 import { rarityById, rarityOfCard, rarityRank } from '../data/rarities.js';
 import { SPECIAL_RARITY_ID, skinOf } from '../codedefs.js';
@@ -25,7 +25,7 @@ import { addInk, inkForLevel } from '../ink.js';
 import { buildBooster, renderPacks } from './packs.js';
 import { renderProfile } from './profile.js';
 import { refreshLevelBadge, updateBadges } from './regalia.js';
-import { buzz } from './settings.js';
+import { buzz } from './prefs.js';
 import { econ, economyIdle, refreshEconomy, serverEconomy } from './econ.js';
 import { batchCap, batchNonce, batchPity, pityAfter, shapeHit, withPity } from '../econ/rules.js';
 import { keepPictures, pictureKept, showPicture } from './pictures.js';
@@ -34,7 +34,6 @@ import {
   readyList, releaseOpen, scheduleReady as readyRefresh, setReadyFocus, startOpen, takeBatch
 } from './ready.js';
 import { wornOpening } from '../cosmetics.js';
-import { playOpening } from './openfx.js';
 import { afterReveal, hush, hushing } from './hush.js';
 import { on } from '../ui/bus.js';
 import { Progressive } from './cardgrid.js';
@@ -635,7 +634,17 @@ function settleBooster(booster) {
   if (pose && pose !== 'none') booster.style.transform = pose;
 }
 
+let openfx = null;
+export const loadOpenFx = () => (openfx ??= import('./openfx.js').catch((error) => { openfx = null; throw error; }));
+
+export function warmOpenFx() {
+  if (wornOpening()) loadOpenFx().catch(() => {});
+}
+
 async function runEffect(id, booster, cards = state.cards, extra = {}) {
+  const fx = await loadOpenFx().catch(() => null);
+  if (!fx) { booster.style.visibility = 'hidden'; return; }
+  const { playOpening } = fx;
   for (const card of cards) card.style.transition = 'none';
   void el.cardStack.offsetHeight;
   const box = booster.getBoundingClientRect();

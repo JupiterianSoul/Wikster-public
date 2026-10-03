@@ -140,15 +140,17 @@ useServerOverlay({
       if (slot.count <= 0) delete inventory[e.id];
     }
   },
-  cards(entries, keys, stateNow) {
+  cards(entries, keys, stateNow, skip = null) {
     const wanted = keys ? new Set(keys) : null;
     const now = Date.now();
     for (const e of pendingOpens(stateNow)) {
       e.cards.forEach((card, i) => {
-        if (!wanted || wanted.has(card.article.key)) addCopy(entries, card, e.id, now + i);
+        const key = card.article.key;
+        if ((!wanted || wanted.has(key)) && !skip?.has(key)) addCopy(entries, card, e.id, now + i);
       });
     }
-  }
+  },
+  pending: () => openingPending()
 });
 
 export function peekPull(id) {

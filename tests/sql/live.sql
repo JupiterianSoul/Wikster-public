@@ -76,3 +76,77 @@ select public.live_phase2();
 select t_is('phase two empties the publication of the live tables', not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime'
   and tablename in ('messages', 'auctions', 'challenges')));
 select t_is('players cannot send on the live topics themselves', not has_function_privilege('authenticated', 'public.live_send(text, text, jsonb)', 'execute'));
+
+delete from realtime.messages;
+select set_config('request.headers', '{"x-wikster-chat":"inbox"}', false);
+insert into messages (sender, recipient, body) values ('ffffffff-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000002', 'quiet one');
+select set_config('request.headers', '{}', false);
+select t_is('a message the app announces itself sends nothing from the insert', not exists (select 1 from realtime.messages));
+select t_is('the chat insert runs one guard before it', (select count(*) = 1 from pg_trigger
+  where tgrelid = 'public.messages'::regclass and not tgisinternal and tgtype & 2 = 2 and tgtype & 4 = 4));
+
+grant insert on realtime.messages to authenticated;
+grant usage on sequence realtime.messages_id_seq to authenticated;
+drop table if exists live_sent;
+create table live_sent (who text, topic text, ok boolean);
+grant insert on live_sent to authenticated;
+insert into auth.users (id) values ('ffffffff-0000-0000-0000-000000000004');
+insert into suspensions (user_id, reason, muted) values ('ffffffff-0000-0000-0000-000000000004', 'quiet', true);
+insert into friendships (requester, addressee, status) values ('ffffffff-0000-0000-0000-000000000004', 'ffffffff-0000-0000-0000-000000000002', 'accepted');
+do $$
+declare who text; t text;
+begin
+  foreach who in array array['ffffffff-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000003', 'ffffffff-0000-0000-0000-000000000004'] loop
+    foreach t in array array['inbox:ffffffff-0000-0000-0000-000000000002', 'user:ffffffff-0000-0000-0000-000000000002', 'inbox:ffffffff-0000-0000-0000-000000000001', 'inbox:nobody', 'world', 'market'] loop
+      perform set_config('request.jwt.claim.sub', who, true);
+      perform set_config('realtime.topic', t, true);
+      set local role authenticated;
+      begin
+        insert into realtime.messages (topic, extension, event, payload) values (t, 'broadcast', 'message', '{}');
+        insert into live_sent values (who, t, true);
+      exception when others then
+        insert into live_sent values (who, t, false);
+      end;
+      reset role;
+    end loop;
+  end loop;
+end $$;
+select t_is('a friend may announce a message in B''s inbox', (select ok from live_sent where who like '%1' and topic like 'inbox:%2'));
+select t_is('but nowhere else', (select bool_and(not ok) from live_sent where who like '%1' and topic not like 'inbox:%2'));
+select t_is('a stranger may not', (select bool_and(not ok) from live_sent where who like '%3'));
+select t_is('nor a muted friend', (select bool_and(not ok) from live_sent where who like '%4'));
+drop table live_sent;
+delete from realtime.messages;
+delete from friendships where requester = 'ffffffff-0000-0000-0000-000000000004';
+delete from suspensions where user_id = 'ffffffff-0000-0000-0000-000000000004';
+
+drop table if exists live_seen;
+create table live_seen (who text, n int);
+grant insert on live_seen to authenticated;
+insert into realtime.messages (topic, event, payload) values ('inbox:ffffffff-0000-0000-0000-000000000002', 'message', '{}');
+do $$
+declare who text;
+begin
+  foreach who in array array['ffffffff-0000-0000-0000-000000000001', 'ffffffff-0000-0000-0000-000000000002'] loop
+    perform set_config('request.jwt.claim.sub', who, true);
+    perform set_config('realtime.topic', 'inbox:ffffffff-0000-0000-0000-000000000002', true);
+    set local role authenticated;
+    insert into live_seen select who, count(*) from realtime.messages;
+    reset role;
+  end loop;
+end $$;
+select t_is('B listens on their own inbox', (select n > 0 from live_seen where who like '%2'));
+select t_is('A cannot listen on it', (select n = 0 from live_seen where who like '%1'));
+drop table live_seen;
+delete from realtime.messages;
+
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-0000-0000-000000000001', false);
+select t_is('the sender can have the server deliver a message the app could not announce', message_live((select id from messages where body = 'quiet one')));
+select t_is('it reaches the recipient with its row', exists (select 1 from realtime.messages where topic = 'user:ffffffff-0000-0000-0000-000000000002'
+  and event = 'message' and payload->'row'->>'body' = 'quiet one'));
+select set_config('request.jwt.claim.sub', 'ffffffff-0000-0000-0000-000000000002', false);
+select t_is('nobody else can', not message_live((select id from messages where body = 'quiet one')));
+select set_config('request.jwt.claim.sub', '', false);
+select t_is('players may call it', has_function_privilege('authenticated', 'public.message_live(uuid)', 'execute')
+  and not has_function_privilege('anon', 'public.message_live(uuid)', 'execute'));
+delete from realtime.messages;

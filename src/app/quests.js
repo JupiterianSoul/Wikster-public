@@ -1,6 +1,6 @@
 import { t, tx } from '../i18n.js';
 import { paintFaces } from './faces.js';
-import { bump, bumpMax, bumpMin, noteIn } from '../ledger.js';
+import { bump, bumpMin } from '../ledger.js';
 import * as quests from '../quests.js';
 import { Ring, Segmented, press, reveal } from '../ui/components.js';
 import { QUEST_TIERS } from '../data/quests.js';
@@ -22,7 +22,6 @@ import { on } from '../ui/bus.js';
 import { gainBooster, spawnBurst } from './open.js';
 import { claimAll, claimAllBar } from './claimall.js';
 
-quests.useClaimedSource((key) => (key !== 'local' && serverEconomy() ? { known: true, ...(state.profile?.questDay ?? {}) } : null));
 
 function noteQuestClaimed(row) {
   bump(state.profile, 'questsClaimed');

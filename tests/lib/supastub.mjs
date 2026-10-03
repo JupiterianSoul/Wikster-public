@@ -103,6 +103,8 @@ export async function runEconomy(engine, econDb, ctx, body, notify = null) {
   if (watched) full.store = watched.store;
   const out = engine.runAsked ? await engine.runAsked(full, action, body.args ?? {}, { ready }) : await engine.run(full, action, body.args ?? {});
   if (action === 'import' && out?.launch && typeof out.launch === 'object') out.launch.live = liveStateOf(econDb.live);
+  const held = ctx.user ? econDb.totals?.(ctx.user) : null;
+  if (held && out && typeof out === 'object' && !Array.isArray(out)) out.totals = held;
   return watched ? deltaReply(out, watched.first(), body.sv) : out;
 }
 
@@ -386,7 +388,7 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
   const guildOf = (user) => db.guildMembers.find((m) => m.user_id === user)?.guild_id ?? null;
   const mayJoin = (user, topic) => {
     if (!user) return false;
-    if (topic === `user:${user}` || topic === 'market' || topic === 'world') return true;
+    if (topic === `user:${user}` || topic === `inbox:${user}` || topic === 'market' || topic === 'world') return true;
     const guild = guildOf(user);
     return Boolean(guild) && topic === `guild:${guild}`;
   };
@@ -442,8 +444,8 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
     if (table === 'guild_goals') db.liveSend(`guild:${r.guild_id}`, 'goal', { type, row: r });
     if (table === 'auctions') db.liveSend('market', 'auction', type === 'DELETE' ? { type } : { type, row: r });
   };
-  db.emitChange = (table, type, record, old = null) => {
-    liveRow(table, type, record, old);
+  db.emitChange = (table, type, record, old = null, { quiet = false } = {}) => {
+    if (!quiet) liveRow(table, type, record, old);
     const row = type === 'DELETE' ? old : record;
     for (const sock of rt.sockets) {
       for (const [topic, join] of sock.joins) {
@@ -683,6 +685,24 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
     }
     reply();
   };
+  await page.route(/^https:\/\/stub\.supabase\.co\/realtime\/v1\/api\/broadcast/, async (route) => {
+    const req = route.request();
+    if (req.method() === 'OPTIONS') return preflight(route);
+    note(req.method(), req.url());
+    const me = caller(route);
+    if (!me) return json(route, { error: 'unauthorized' }, 401);
+    if (db.broadcastDown) return json(route, { error: 'unavailable' }, 503);
+    let body = {};
+    try { body = JSON.parse(req.postData() ?? '{}'); } catch {}
+    for (const m of Array.isArray(body.messages) ? body.messages : []) {
+      const target = /^inbox:(.+)$/.exec(String(m?.topic ?? ''))?.[1];
+      if (!m.private || !target || !areFriends(me, target)) { (rt.refusedSends ??= []).push({ user: me, topic: m?.topic }); continue; }
+      (db.announced ??= []).push({ from: me, topic: m.topic, event: m.event, payload: m.payload });
+      db.liveSend(m.topic, m.event, m.payload);
+    }
+    return route.fulfill({ status: 202, headers: CORS, body: '' });
+  });
+
   await page.routeWebSocket(/stub\.supabase\.co\/realtime\/v1\/websocket/, (ws) => {
     const sock = { ws, user: null, joins: new Map() };
     rt.sockets.add(sock);
@@ -1695,6 +1715,14 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
 
     if (schema === 'v1' && V1_ABSENT_TABLES.includes(path)) return noTable(route, path);
 
+    if (path === 'rpc/message_live') {
+      const m = db.messages.find((x) => x.id === body?.p_id && x.sender === me && !x.read_at);
+      if (!m) return json(route, false);
+      (db.liveFallbacks ??= []).push(m.id);
+      db.liveSend(`user:${m.recipient}`, 'message', { type: 'INSERT', row: m });
+      return json(route, true);
+    }
+
     if (path === 'messages') {
       if (method === 'GET') {
         let found = db.messages.filter((m) => m.sender === me || m.recipient === me);
@@ -1706,6 +1734,12 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
         }
         if ((params.get('recipient') ?? '').startsWith('eq.')) {
           found = found.filter((m) => m.recipient === params.get('recipient').slice(3));
+        }
+        const idIn = /^in\.\((.*)\)$/.exec(params.get('id') ?? '');
+        if (idIn) {
+          const ids = new Set(idIn[1].split(',').map((v) => v.replace(/"/g, '')));
+          (db.idReads ??= []).push(...ids);
+          found = found.filter((m) => ids.has(m.id));
         }
         if (params.get('read_at') === 'is.null') found = found.filter((m) => !m.read_at);
         if ((params.get('order') ?? '').includes('created_at.desc')) {
@@ -1721,7 +1755,7 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
         if (screenText(body.body, 'chat')) return fail(route, 'FILTERED', 400, 'P0001');
         const row = { id: uuid(), read_at: null, created_at: new Date().toISOString(), ...body };
         db.messages.push(row);
-        db.emitChange('messages', 'INSERT', row);
+        db.emitChange('messages', 'INSERT', row, null, { quiet: route.request().headers()['x-wikster-chat'] === 'inbox' });
         return rows(route, [row], 201);
       }
       if (method === 'PATCH') {

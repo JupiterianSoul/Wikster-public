@@ -90,7 +90,8 @@ const idB = userIdOf('grace@example.com');
 shared.friendships.push({ id: 'f1', requester: idA, addressee: idB, status: 'accepted', created_at: new Date().toISOString() });
 await a.waitForTimeout(1200);
 check('both players have joined their own private topic', wiresOf(idA).includes(`realtime:user:${idA}`) && wiresOf(idB).includes(`realtime:user:${idB}`), JSON.stringify([wiresOf(idA), wiresOf(idB)]));
-check('and nothing else that reads the tables', wiresOf(idA).every((t) => ['realtime:presence:lobby', `realtime:user:${idA}`, 'realtime:world'].includes(t)), JSON.stringify(wiresOf(idA)));
+check('and their own inbox', wiresOf(idA).includes(`realtime:inbox:${idA}`) && wiresOf(idB).includes(`realtime:inbox:${idB}`), JSON.stringify([wiresOf(idA), wiresOf(idB)]));
+check('and nothing else that reads the tables', wiresOf(idA).every((t) => ['realtime:presence:lobby', `realtime:user:${idA}`, `realtime:inbox:${idA}`, 'realtime:world'].includes(t)), JSON.stringify(wiresOf(idA)));
 check('no join was refused along the way', shared.realtime.denied.length === 0, JSON.stringify(shared.realtime.denied));
 const tryJoin = (page, topic) => page.evaluate(async (topic) => {
   const token = JSON.parse(localStorage.getItem('wikster.auth') ?? '{}').access_token;
@@ -102,6 +103,7 @@ const tryJoin = (page, topic) => page.evaluate(async (topic) => {
   });
 }, topic);
 check('A cannot join B\'s private topic', (await tryJoin(a, `user:${idB}`)) === 'error' && shared.realtime.denied.some((d) => d.user === idA && d.topic === `realtime:user:${idB}`));
+check('nor B\'s inbox', (await tryJoin(a, `inbox:${idB}`)) === 'error');
 check('nor a guild A is not in', (await tryJoin(a, 'guild:someone-elses')) === 'error');
 check('but A may join their own', (await tryJoin(a, `user:${idA}`)) === 'ok');
 check('and the presence lobby', wiresOf(idA).includes('realtime:presence:lobby') && wiresOf(idB).includes('realtime:presence:lobby'));
@@ -127,6 +129,10 @@ await a.locator('#chat-send').click();
 const bubble = a.locator('#chat-log .bubble.is-mine').first();
 check('my bubble is up, one tick', await until(async () => (await bubble.count()) === 1) && !(await bubble.evaluate((n) => n.classList.contains('is-read'))));
 check('B\'s friends list shows the unread at once', await until(async () => /1/.test(await b.locator('#friends-list .person .count').first().textContent())), await b.locator('#friends-list').textContent());
+const sentRow = shared.messages.find((m) => m.body === 'hello grace');
+check('A announced it in B\'s inbox, with no body', (shared.announced ?? []).some((x) => x.from === idA && x.topic === `inbox:${idB}` && x.payload?.row?.id === sentRow?.id && !('body' in (x.payload?.row ?? {}))), JSON.stringify(shared.announced));
+check('the insert itself sent nothing', !(shared.liveLog ?? []).some((x) => x.topic.startsWith('user:') && x.event === 'message' && x.payload?.row?.id === sentRow?.id));
+check('B read the row from the server before showing it', (shared.idReads ?? []).includes(sentRow?.id));
 
 section('the receipt');
 await b.locator('#friends-list .person').first().click();
@@ -139,6 +145,15 @@ check('and says Seen', /seen/i.test(await a.locator('#chat-log .chat-receipt').t
 await b.locator('#chat-input').fill('hi ada');
 await b.locator('#chat-send').click();
 check('B\'s answer is in A\'s log at once', await until(async () => /hi ada/.test(await a.locator('#chat-log').textContent())));
+const fake = 'f0000000-0000-4000-8000-000000000001';
+shared.liveSend(`inbox:${idA}`, 'message', { type: 'INSERT', row: { id: fake, sender: idB, recipient: idA, body: 'not from grace' } });
+await a.waitForTimeout(1200);
+check('a made up announcement shows nothing', !/not from grace/.test(await a.locator('#chat-log').textContent()));
+shared.broadcastDown = true;
+await b.locator('#chat-input').fill('still there');
+await b.locator('#chat-send').click();
+check('when the broadcast is down the server delivers it instead', await until(async () => /still there/.test(await a.locator('#chat-log').textContent())) && (shared.liveFallbacks ?? []).length === 1, JSON.stringify(shared.liveFallbacks));
+shared.broadcastDown = false;
 
 section('a parcel and a request');
 const before = await a.evaluate(() => Object.values(JSON.parse(localStorage.getItem('wikster.inventory.v1') ?? '{}')).reduce((n, s) => n + (s.count ?? 0), 0));

@@ -1,5 +1,7 @@
 const STAMP = '__STAMP__';
 const PRECACHE = __PRECACHE__;
+const LATER = __LATER__;
+const LANGS = __LANGS__;
 const SHELL = `wikster-shell-${STAMP}`;
 const PICTURES = 'wikster-pictures-v2';
 const OLD_PICTURES = ['wikster-pictures'];
@@ -8,10 +10,70 @@ const KEEP_SHELLS = 2;
 const NAV_TIMEOUT_MS = 3000;
 const SHARED_PICTURES = /(^|\.)wikimedia\.org$/;
 
+const isAsset = (url) => new URL(url, self.location.href).pathname.includes('/assets/');
+const keepable = (url) => {
+  const at = new URL(url, self.location.href);
+  return at.origin === self.location.origin && at.pathname.includes('/assets/') && !at.pathname.endsWith('.mp3');
+};
+
+async function carry(cache, url) {
+  if (await cache.match(url)) return true;
+  const old = await caches.match(url);
+  if (!old) return false;
+  await cache.put(url, old);
+  return true;
+}
+
+async function fill(cache, list) {
+  await Promise.all(list.map(async (url) => {
+    if (isAsset(url) && await carry(cache, url)) return;
+    const res = await fetch(url, { cache: isAsset(url) ? 'default' : 'no-cache' });
+    if (!res.ok) throw new Error(`precache ${url} ${res.status}`);
+    await cache.put(url, res);
+  }));
+  for (const url of LATER) await carry(cache, url).catch(() => {});
+}
+
+async function fetchInto(cache, url) {
+  if (await carry(cache, url)) return true;
+  const res = await fetch(url);
+  if (!res.ok) return false;
+  await cache.put(url, res);
+  return true;
+}
+
+let warming = null;
+function warm(list) {
+  warming ??= (async () => {
+    const cache = await caches.open(SHELL);
+    for (const url of list) {
+      try { if (!await fetchInto(cache, url)) break; } catch { break; }
+    }
+  })().finally(() => { warming = null; });
+  return warming;
+}
+
+async function keep(urls) {
+  const cache = await caches.open(SHELL);
+  for (const url of urls) {
+    if (!keepable(url)) continue;
+    await fetchInto(cache, url).catch(() => false);
+  }
+}
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(SHELL).then((cache) => cache.addAll(PRECACHE)).then(() => self.skipWaiting())
+    caches.open(SHELL).then((cache) => fill(cache, PRECACHE)).then(() => self.skipWaiting())
   );
+});
+
+self.addEventListener('message', (event) => {
+  const data = event.data ?? {};
+  if (data.type === 'warm') {
+    const other = new Set(Object.entries(LANGS).filter(([lang]) => lang !== data.lang).flatMap(([, list]) => list));
+    event.waitUntil(warm(LATER.filter((url) => !other.has(url))));
+  }
+  else if (data.type === 'keep' && Array.isArray(data.urls)) event.waitUntil(keep(data.urls.slice(0, 200)));
 });
 
 self.addEventListener('activate', (event) => {
