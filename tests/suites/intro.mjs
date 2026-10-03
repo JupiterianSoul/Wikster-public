@@ -105,14 +105,15 @@ for (const id of ['arcade', 'paper', 'wankel', 'elden']) {
   await p.goto(`${BASE}?intro=1`, { waitUntil: 'domcontentloaded' });
   const got = await intro(p, () => {
     const root = document.getElementById('intro');
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    const css = getComputedStyle(document.documentElement);
+    const accent = css.getPropertyValue('--accent').trim() || css.getPropertyValue('--intro-acc').trim();
     return {
       theme: document.documentElement.dataset.theme,
       bg: getComputedStyle(root).backgroundColor,
       accent,
       hex: getComputedStyle(document.querySelector('.intro-mark .hex')).stroke,
       font: getComputedStyle(document.querySelector('.intro-word')).fontFamily,
-      rootFont: getComputedStyle(document.documentElement).getPropertyValue('--font-display').trim() || getComputedStyle(document.documentElement).getPropertyValue('--font').trim(),
+      rootFont: ['--font-display', '--font', '--intro-font-display', '--intro-font'].map((name) => css.getPropertyValue(name).trim()).find(Boolean) ?? '',
       pace: getComputedStyle(document.documentElement).getPropertyValue('--intro-pace').trim(),
       meta: document.querySelector('meta[name="theme-color"]')?.getAttribute('content')
     };

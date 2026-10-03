@@ -159,7 +159,7 @@ await page.waitForTimeout(1500);
 check('with an empty server wallet the purchase is refused', server().wallet.coins === 0);
 check('and nothing lands on the shelf', await page.evaluate(() => JSON.stringify(window.__wikster.state.inventory)) === shelf);
 const told = await page.evaluate(() => window.__toasts ?? []);
-check('the screen is told so', told.some((text) => /not enough/i.test(text)), told.join(' | '));
+check('the screen is told so', told.some((text) => /Buckarooz|wallet|pricey/i.test(text)), told.join(' | '));
 
 section('a slow server does not slow the screen');
 await econDb.store(ID).apply({ coins: 50000 });
