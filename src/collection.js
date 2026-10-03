@@ -11,7 +11,7 @@ import { normalizeDaily } from './daily.js';
 import { emptyTimed, accrue } from './timed.js';
 import { t } from './i18n.js';
 import { touch } from './save.js';
-import { addPrints, bestPrint, collectionValue, printPrice, printsOf, takePrints } from './econ/rules.js';
+import { addPrints, bestPrint, collectionValue, notePulls, printPrice, printsOf, takePrints } from './econ/rules.js';
 
 const CARDS_KEY = 'wikster.collection.v3';
 const WALLET_KEY = 'wikster.wallet.v1';
@@ -496,6 +496,7 @@ export function recordOpening(profile, pulls) {
     const id = pull.rarity.id;
     profile.rarityCounts[id] = (profile.rarityCounts[id] ?? 0) + 1;
   }
+  profile.pullStats = notePulls(profile.pullStats, pulls.map((p) => ({ rarityId: p.rarity?.id, price: p.price, key: p.article?.key, title: p.article?.title, special: p.article?.special })), 1, Date.now());
   saveProfile(profile);
 }
 

@@ -103,6 +103,7 @@ Only when the task needs them:
 - Control's grants go through the `grants` table and are claimed by the server `grants` action; `profile` and `profileAdd` rows the server cannot own are applied on the device.
 - Every reward writes a claim key (`quest:<day>:<id>`, `daily:<day>`, `ach:<id>`, `rung:<season>:<i>`, `stipendh:<hour>`...) in `claims`; a second insert raises `ALREADY_CLAIMED`. Claimed daily quests are also kept in the econ state (`questDay`), and in server mode the quest board shows claimed from that, never from the device alone.
 - The shop restocks every hour (`REFRESH_MS`); the stipend is 250 per hour and banks 8 hours. Old saves carry a two hour `stipendWindow`, read through `stipendHourOf`.
+- Profile Statistics (`src/profilestats.js` computes, `src/app/statsboard.js` paints, memoised on `saveWrites()`): everything comes from loaded state, no request. `state.pullStats` (`notePulls` in `src/econ/rules.js`, written by `open` in the same commit) keeps boosters and value since it started, today, the last 12 weeks, the luckiest day and the best pull; `daily` keeps `run`, `best` and `total`. Both count from October 2026, so older players see them fill up. The economy section is owner only; friends see the profile columns plus unique cards.
 - "Claim all" buttons (`src/app/claimall.js`) send their claims with `gather`, so the predicted actions leave in one `batch` request.
 
 ## Custom boosters, pictures and mature wikis
@@ -159,7 +160,7 @@ Only when the task needs them:
 ## Tests
 
 - `npm run check`: i18n check, sweep (secrets, em dashes and similar), unit tests, typecheck.
-- `node tests/run.mjs [suite...]`: Playwright suites against an offline build or a Supabase stub (`tests/lib/supastub.mjs`). All 49 must pass before pushing (`slow` holds every REST call 3 s and checks taps still answer within 300 ms). Suites run in parallel (up to 8 at a time, half the cores; `TEST_JOBS=1` for one at a time), about 4 minutes for all of them on the dev machine.
+- `node tests/run.mjs [suite...]`: Playwright suites against an offline build or a Supabase stub (`tests/lib/supastub.mjs`). All 50 must pass before pushing (`slow` holds every REST call 3 s and checks taps still answer within 300 ms). Suites run in parallel (up to 8 at a time, half the cores; `TEST_JOBS=1` for one at a time), about 4 minutes for all of them on the dev machine.
 - `browsers` and `browsersguest` walk every tab in Chromium, Firefox and WebKit (iPhone, iPhone landscape, Mac) on CI; locally only Chromium is installed.
 - The stub can play a creator account (`db.creators`) and applies PostgREST filters through `filtered()`.
 - `tests/sql/run.mjs` needs `WIKSTER_PG` (Docker needs the docker group; without it, run the same files in PGlite); Control's gate test is `test/run.sh` with a local Postgres 16.

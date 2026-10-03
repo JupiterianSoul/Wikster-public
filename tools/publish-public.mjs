@@ -32,9 +32,13 @@ const git = (argv, opts = {}) => execFileSync('git', argv, { encoding: 'utf8', m
 const lines = (path) => (existsSync(path) ? readFileSync(path, 'utf8').split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#')) : []);
 
 const KEEP_WORKFLOWS = ['tests.yml'];
-const ALWAYS_OUT = ['RELEASE.md', 'CLAUDE.local.md', 'android/keystore/', 'public/control/index.html', 'tools/private-words.txt', 'tools/public-exclude.txt'];
+const ALWAYS_OUT = ['RELEASE.md', 'CLAUDE.local.md', 'android/', 'desktop/', 'store/', 'public/control/index.html', 'tools/private-words.txt', 'tools/public-exclude.txt', 'tools/loadtest.mjs', 'tools/loadtest.md', 'tools/android-icons.mjs', 'tools/desktop-icons.mjs', 'tools/store-art.mjs', 'tools/icons.mjs', 'tools/stress-clients.mjs'];
 const EXTRA_OUT = lines(join(ROOT, 'tools/public-exclude.txt'));
 const PRIVATE_WORDS = lines(join(ROOT, 'tools/private-words.txt')).filter((w) => w.length >= 4);
+if (!PRIVATE_WORDS.length) {
+  console.error('tools/private-words.txt is missing or empty: copy it from the private notes before publishing');
+  process.exit(1);
+}
 
 function noreply() {
   if (args.email) return String(args.email);

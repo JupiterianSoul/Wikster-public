@@ -39,7 +39,7 @@ import { SERVER_ONLY } from './local.js';
 import { CARD_FIX, fixSpecialCards } from './fix.js';
 import { fixCardPictures } from './picfix.js';
 import { buyLive, eventGift, redeemFromBook, withOverrides } from './liveops.js';
-import { reservePlan, batchable, batchCap, batchNonce, batchPity, batchSizes, bestPrint, fuseRarity, fuseTierOf, mergedNonce, noteOpen, pityAfter, printCount, printPrice, printsOf, shapeHit, sortedPrints, spareRarity, takePrints, withPity } from './rules.js';
+import { reservePlan, batchable, batchCap, batchNonce, batchPity, batchSizes, bestPrint, notePulls, fuseRarity, fuseTierOf, mergedNonce, noteOpen, pityAfter, printCount, printPrice, printsOf, shapeHit, sortedPrints, spareRarity, takePrints, withPity } from './rules.js';
 
 export { ECON_KEYS, EconError };
 
@@ -1049,6 +1049,7 @@ export const ACTIONS = {
       for (const c of cards) counts[c.rarityId] = (counts[c.rarityId] ?? 0) + 1;
       state.rarityCounts = counts;
       state.pity = pitied.dry;
+      state.pullStats = notePulls(loaded.state.pullStats, cards.map((c) => ({ rarityId: c.rarityId, price: c.price, key: c.article?.key, title: c.article?.title, special: c.article?.special })), boosters, ctx.now);
       if (spec.kind === 'timed') {
         const timed = clone(loaded.state.timed ?? emptyTimed());
         timed.opened = (Number(timed.opened) || 0) + (spec.timedSlots ?? 1) * boosters;

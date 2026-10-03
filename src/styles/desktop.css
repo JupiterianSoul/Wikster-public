@@ -342,7 +342,8 @@
   #screen-profile > .hero-card { grid-column: 1; grid-row: 1 / span 99; align-self: start; margin: 0 0 0 var(--gutter); max-width: none; }
   #screen-profile > :not(.hero-card) { grid-column: 2; }
   #screen-profile > .section-head { padding-inline: 0; }
-  #screen-profile > .badge-grid, #screen-profile > .stat-grid, #screen-profile > .rarity-bars { margin-inline: 0; max-width: none; }
+  #screen-profile > .badge-grid, #screen-profile > .stat-grid, #screen-profile > .stat-board, #screen-profile > .rarity-bars { margin-inline: 0; max-width: none; }
+  #screen-profile > .stat-board { padding-inline: 0; }
 
   #screen-timed.is-active {
     display: grid;

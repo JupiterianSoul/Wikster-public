@@ -1950,6 +1950,7 @@ export function paintFriendStats(entry) {
       .toLocaleDateString(getLanguage(), { year: 'numeric', month: 'short', day: 'numeric' })],
     [t('statBoosters'), (person.boosters_opened ?? 0).toLocaleString()],
     [t('statCards'), (person.cards ?? 0).toLocaleString()],
+    [t('statUnique'), (person.unique_cards ?? 0).toLocaleString()],
     [t('statValue'), formatAmount(person.collection_value ?? 0)],
     [t('statAchievements'), (() => { const n = friendShelf(person).ach; return n == null ? '…' : String(n); })()],
     [t('statBest'), person.best_rarity && best ? tx(best.name) : t('none')]

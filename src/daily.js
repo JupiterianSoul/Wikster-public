@@ -61,6 +61,10 @@ export const nextIndex = (daily, now = Date.now()) =>
 
 export function claim(daily, now = Date.now()) {
   if (!canClaim(daily, now)) return null;
+  const alive = daily.lastDay != null && streakAlive(daily, now);
+  daily.run = (alive ? Math.max(Number(daily.run) || 0, Number(daily.day) || 0) : 0) + 1;
+  daily.best = Math.max(Number(daily.best) || 0, daily.run);
+  daily.total = (Number(daily.total) || 0) + 1;
   if (daily.lastDay != null && !streakAlive(daily, now)) daily.day = 0;
   const index = (Number(daily.day) || 0) % WEEK;
   const gift = weekLadder(daily.weeks)[index];

@@ -1051,5 +1051,20 @@ export const RELEASES = [
       { en: 'Higher grades move more: a light running round the rim, orbiting sparks, flickering flames. Movement stops with Reduce motion, Battery saver and on screens you are not looking at, and small frames such as the one in the app bar drop their finest details so the level number stays easy to read',
         fr: 'Plus le rang est haut, plus le cadre bouge : une lumière qui court sur le bord, des étincelles en orbite, des flammes qui vacillent. Le mouvement s’arrête avec Réduire les animations, l’Économie de batterie et sur les écrans que vous ne regardez pas, et les petits cadres comme celui de la barre du haut perdent leurs plus fins détails pour que le niveau reste lisible' }
     ]
+  },
+  {
+    id: 'stats-board', icon: 'podium', accent: '#a78bfa',
+    title: { en: 'A real Statistics page', fr: 'Une vraie page de statistiques' },
+    points: [
+      { en: 'Your profile statistics, grouped: collection, boosters, economy, activity, minigames and social', fr: 'Les statistiques de votre profil, regroupées : collection, boosters, économie, activité, mini-jeux et social' },
+      { en: 'Copies by print, albums by family and new cards per week, drawn as charts', fr: 'Les exemplaires par impression, les albums par famille et les nouvelles cartes par semaine, en graphiques' },
+      { en: 'Your best pull, luckiest day and how close the next guaranteed Legendary is', fr: 'Votre meilleure carte, votre jour le plus chanceux et l\u2019approche de la prochaine Légendaire garantie' }
+    ],
+    changelog: [
+      { en: 'Boosters opened today and this week, the average value per booster, the luckiest day, the best pull and the daily gift streak are counted from this update on, so they fill up as you play.',
+        fr: 'Les boosters ouverts aujourd\u2019hui et cette semaine, la valeur moyenne par booster, le jour le plus chanceux, la meilleure carte et la série de cadeaux du jour sont comptés à partir de cette mise à jour : ils se remplissent en jouant.' },
+      { en: 'The economy section is only shown to you. Friends visiting your profile now also see how many different cards you have.',
+        fr: 'La section économie n\u2019est visible que par vous. Les amis qui visitent votre profil voient aussi combien de cartes différentes vous avez.' }
+    ]
   }
 ];
