@@ -411,6 +411,7 @@ export async function flushSync() {
   }
 }
 
+let keyBaseSent = '';
 let keyStatsSent = '';
 let lookSent = '';
 
@@ -441,16 +442,20 @@ async function flushKeys() {
     badges: full.badges,
     ...(Array.isArray(state.profile.showcase) ? { showcase: state.profile.showcase.slice(0, SHOWCASE_MAX) } : {})
   };
+  const base = `${userId()}:${JSON.stringify(stats)}`;
+  const leaving = typeof document !== 'undefined' && document.visibilityState === 'hidden';
   let pending = null;
-  try { pending = summaryToSend({ leaving: typeof document !== 'undefined' && document.visibilityState === 'hidden' }); } catch {}
+  if (leaving || base !== keyBaseSent) {
+    try { pending = summaryToSend({ leaving }); } catch {}
+  }
   if (pending) stats.summary = pending.summary;
   const said = `${userId()}:${JSON.stringify(stats)}`;
-  const done = await account.syncMe(userId(), { stats: said !== keyStatsSent ? stats : null });
+  const done = await account.syncMe(userId(), { stats: (base !== keyBaseSent || pending) && said !== keyStatsSent ? stats : null });
   if (!done) return false;
   if (done.status === 'outdated') { state.account.outdated = true; showUpdateBar('outdated'); return true; }
   if (done.status !== 'frozen') summaryLanded(pending);
   if (done.status === 'frozen') return true;
-  if (done.status !== 'same') keyStatsSent = said;
+  if (done.status !== 'same') { keyStatsSent = said; keyBaseSent = base; }
   if (done.status === 'merged') takeMerge();
   return true;
 }
