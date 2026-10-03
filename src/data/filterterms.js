@@ -1,0 +1,41 @@
+export const FILTER_TERMS = [
+  ['nigger', 'slur', 'any'], ['nigga', 'slur', 'any'], ['faggot', 'slur', 'any'], ['tranny', 'slur', 'any'],
+  ['retard', 'slur', 'any'], ['wetback', 'slur', 'any'], ['raghead', 'slur', 'any'], ['towelhead', 'slur', 'any'],
+  ['shemale', 'slur', 'any'], ['kike', 'slur', 'word'], ['spic', 'slur', 'word'], ['chink', 'slur', 'word'],
+  ['gook', 'slur', 'word'], ['coon', 'slur', 'word'], ['beaner', 'slur', 'word'], ['paki', 'slur', 'word'],
+  ['dyke', 'slur', 'word'], ['fag', 'slur', 'word'],
+  ['bougnoule', 'slur', 'any'], ['youpin', 'slur', 'any'], ['tarlouze', 'slur', 'any'], ['tafiole', 'slur', 'any'],
+  ['chinetoque', 'slur', 'any'], ['niakoue', 'slur', 'any'], ['negre', 'slur', 'word'], ['bicot', 'slur', 'word'],
+  ['pede', 'slur', 'word'], ['pd', 'slur', 'word'], ['tapette', 'slur', 'word'], ['gouine', 'slur', 'word'],
+  ['triso', 'slur', 'exact'], ['bamboula', 'slur', 'word'],
+
+  ['porn', 'sexual', 'any'], ['hentai', 'sexual', 'any'], ['blowjob', 'sexual', 'any'], ['handjob', 'sexual', 'any'],
+  ['cumshot', 'sexual', 'any'], ['jizz', 'sexual', 'any'], ['dildo', 'sexual', 'any'], ['titties', 'sexual', 'any'],
+  ['sexting', 'sexual', 'any'], ['pedophile', 'sexual', 'any'], ['molest', 'sexual', 'any'], ['incest', 'sexual', 'any'],
+  ['dick', 'sexual', 'word'], ['cock', 'sexual', 'word'], ['pussy', 'sexual', 'word'], ['cunt', 'sexual', 'word'],
+  ['cum', 'sexual', 'word'], ['anal', 'sexual', 'word'], ['boobs', 'sexual', 'word'], ['tits', 'sexual', 'word'],
+  ['nudes', 'sexual', 'word'], ['rape', 'sexual', 'word'], ['rapist', 'sexual', 'word'], ['pedo', 'sexual', 'word'],
+  ['horny', 'sexual', 'word'], ['milf', 'sexual', 'word'], ['nsfw', 'sexual', 'word'], ['sex', 'sexual', 'word'],
+  ['branler', 'sexual', 'any'], ['branlette', 'sexual', 'any'], ['niquer', 'sexual', 'any'], ['fellation', 'sexual', 'any'],
+  ['sodomie', 'sexual', 'any'], ['chatte', 'sexual', 'exact'], ['baise', 'sexual', 'word'], ['suce', 'sexual', 'word'],
+  ['nique', 'sexual', 'word'], ['encule', 'sexual', 'word'], ['zizi', 'sexual', 'word'], ['teub', 'sexual', 'word'],
+  ['viol', 'sexual', 'word'], ['violer', 'sexual', 'word'],
+
+  ['fuck', 'profanity', 'any'], ['bitch', 'profanity', 'any'], ['asshole', 'profanity', 'any'], ['whore', 'profanity', 'any'],
+  ['wanker', 'profanity', 'any'], ['shit', 'profanity', 'word'], ['bastard', 'profanity', 'word'], ['ass', 'profanity', 'word'],
+  ['slut', 'profanity', 'word'], ['twat', 'profanity', 'word'], ['bollocks', 'profanity', 'word'], ['prick', 'profanity', 'exact'],
+  ['fck', 'profanity', 'word'], ['wtf', 'profanity', 'word'], ['stfu', 'profanity', 'word'],
+  ['putain', 'profanity', 'any'], ['connard', 'profanity', 'any'], ['connasse', 'profanity', 'any'], ['salope', 'profanity', 'any'],
+  ['enfoire', 'profanity', 'any'], ['merde', 'profanity', 'word'], ['con', 'profanity', 'word'], ['conne', 'profanity', 'exact'],
+  ['salaud', 'profanity', 'word'], ['batard', 'profanity', 'word'], ['ntm', 'profanity', 'word'], ['fdp', 'profanity', 'word'],
+  ['pute', 'profanity', 'word'],
+
+  ['admin', 'reserved', 'any'], ['moderator', 'reserved', 'any'], ['moderateur', 'reserved', 'any'], ['modo', 'reserved', 'word'],
+  ['wikster', 'reserved', 'any'], ['wikipedia', 'reserved', 'any'], ['wikimedia', 'reserved', 'any'], ['official', 'reserved', 'any'],
+  ['officiel', 'reserved', 'any'], ['support', 'reserved', 'any'], ['staff', 'reserved', 'word'], ['jupiterian', 'reserved', 'any'],
+  ['system', 'reserved', 'exact'],
+
+  ['snapchat', 'contact', 'any'], ['discord', 'contact', 'any'], ['whatsapp', 'contact', 'any'], ['instagram', 'contact', 'any'],
+  ['onlyfans', 'contact', 'any'], ['snap', 'contact', 'word'], ['telegram', 'contact', 'word'], ['insta', 'contact', 'word'],
+  ['kik', 'contact', 'word'], ['skype', 'contact', 'word'], ['wechat', 'contact', 'word']
+];

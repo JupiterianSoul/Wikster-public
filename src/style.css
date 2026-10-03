@@ -1,0 +1,14 @@
+@layer themes, base, components, booster, cards, screens, games, desktop, pc;
+
+@import './styles/themes.css' layer(themes);
+@import './styles/base.css' layer(base);
+@import './styles/components.css' layer(components);
+@import './styles/inbox.css' layer(components);
+@import './styles/booster.css' layer(booster);
+@import './styles/looks.css' layer(booster);
+@import './styles/cards.css' layer(cards);
+@import './styles/screens.css' layer(screens);
+@import './styles/custom.css' layer(screens);
+@import './styles/games.css' layer(games);
+@import './styles/desktop.css' layer(desktop);
+@import './styles/pc.css' layer(pc);
