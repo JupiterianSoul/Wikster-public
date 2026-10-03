@@ -113,6 +113,7 @@ h2.is-refreshing::before { top: auto; bottom: -4px; }
   backdrop-filter: var(--blur);
   position: relative;
 }
+.icon-btn svg { display: block; }
 .icon-btn:hover { color: var(--ink); }
 .icon-btn.is-hot { color: var(--accent-text, var(--accent)); border-color: var(--accent); }
 [data-theme='arcade'] .icon-btn { border-radius: var(--radius); }

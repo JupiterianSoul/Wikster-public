@@ -4,6 +4,7 @@ import { launchOptions } from '../lib/browser.mjs';
 import { installStubs } from '../lib/stubs.mjs';
 import { RELEASES } from '../../src/data/releases.js';
 import { customTileAudit } from '../lib/customtile.mjs';
+import { centerAudit } from '../lib/centering.mjs';
 import { dropdownAudit } from '../lib/dropdown.mjs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,11 +26,12 @@ const CONFIGS = process.env.FIT_SIZES || process.env.FIT_SCALES
   ? grid(process.env.FIT_SIZES ? parseList(process.env.FIT_SIZES) : [[1920, 1080]], process.env.FIT_SCALES ? parseList(process.env.FIT_SCALES) : [1])
   : FULL ? grid(GRID_SIZES, GRID_SCALES) : [[1280, 720, 1.4], [1920, 1080, 1], [2560, 1440, 0.8]];
 
-const SCREENS = [
+const ALL_SCREENS = [
   'home', 'packs', 'custom', 'timed', 'binder', 'albums', 'classic', 'selling', 'cardindex', 'glossary',
   'shop', 'atelier', 'market', 'games', 'quiz', 'quests', 'season', 'leaderboard',
   'friends', 'discussions', 'profile', 'ach', 'badges', 'customize', 'settings', 'updates'
-].filter((s) => !ONLY || ONLY.includes(s));
+];
+const SCREENS = ALL_SCREENS.filter((s) => !ONLY || ONLY.includes(s));
 
 const TIERS = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'exotic', 'prismatic'];
 const PACKS = ['animals', 'space', 'history', 'art', 'food', 'music', 'cars', 'planes'];
@@ -245,6 +247,11 @@ async function visit(screen) {
   await settle('.pc-stage');
 }
 
+async function centered(res, root = '#pc') {
+  const off = await page.evaluate(centerAudit, root);
+  return { ...res, issues: [...res.issues, ...off.map((i) => `off center: ${i}`)] };
+}
+
 const tabsOf = () => page.evaluate(() => [...document.querySelectorAll('.pc-legacy .screen.is-active .pc-section-link')].map((b) => b.dataset.group));
 
 let failures = 0;
@@ -363,14 +370,14 @@ for (const [w, h, scale] of CONFIGS) {
           await page.waitForTimeout(300);
           await settle('.pc-stage');
         }
-        record(`${tag}${w}x${h} @${scale} ${screen}${run.group ? '#' + run.group : ''}${run.sub ? '/' + run.sub : ''}`, await page.evaluate(audit));
+        record(`${tag}${w}x${h} @${scale} ${screen}${run.group ? '#' + run.group : ''}${run.sub ? '/' + run.sub : ''}`, await centered(await page.evaluate(audit)));
         if (SHOTS && report.at(-1)?.startsWith('        ')) await page.screenshot({ path: `${SHOTS}/${tag.trim()}${tag ? '-' : ''}${w}x${h}-${scale}-${screen}${run.group ? '-' + run.group : ''}${run.sub ? '-' + run.sub : ''}.png` });
       }
     }
     if (!ONLY || ONLY.includes('states')) {
       for (const [name, enter, check, arg] of STATES) {
         await enter();
-        record(`${tag}${w}x${h} @${scale} ${name}`, await page.evaluate(check, arg));
+        record(`${tag}${w}x${h} @${scale} ${name}`, await centered(await page.evaluate(check, arg), arg ?? '#pc'));
         if (SHOTS && report.at(-1)?.startsWith('        ')) await page.screenshot({ path: `${SHOTS}/${tag.trim()}${tag ? '-' : ''}${w}x${h}-${scale}-${name}.png` });
         await leave();
       }
@@ -391,7 +398,7 @@ if (!ONLY || ONLY.includes('selling')) {
     await page.setViewportSize({ width: w, height: h });
     await setScale(scale);
     await visit('selling');
-    record(`fr matrix ${w}x${h} @${scale} selling`, await page.evaluate(audit));
+    record(`fr matrix ${w}x${h} @${scale} selling`, await centered(await page.evaluate(audit)));
   }
 }
 
@@ -797,6 +804,97 @@ if (!ONLY || ONLY.includes('customtile')) {
   for (const [w, h, scale] of [[1280, 720, 1.4], [1440, 900, 1], [1920, 1080, 1]]) {
     await tileRun(`pc ${w}x${h} @${scale} custom wikis`, { viewport: { width: w, height: h }, pc: true, scale, go: pcCustom, del: true });
     await tileRun(`pc fr ${w}x${h} @${scale} shop built boosters`, { viewport: { width: w, height: h }, pc: true, scale, lang: 'fr', go: pcShop });
+  }
+}
+if (ONLY?.includes('centering')) {
+  const DRAWER = ['ach', 'badges', 'quiz', 'games', 'quests', 'season', 'leaderboard', 'updates', 'customize', 'atelier', 'settings'];
+  const seedCenter = ({ entries, inventory, wiki, seen, lang, pc }) => {
+    if (sessionStorage.getItem('seeded')) return;
+    sessionStorage.setItem('seeded', '1');
+    localStorage.setItem('wikster.language', lang);
+    localStorage.setItem('wikster.layout.v1', pc ? 'pc' : 'mobile');
+    const now = Date.now();
+    localStorage.setItem('wikster.profile.v1', JSON.stringify({
+      started: true, createdAt: now - 86400000 * 40, playMs: 7200000, boostersOpened: 240, rarityCounts: { common: 90, rare: 60 }, progress: { level: 23, xp: 200 }, pendingLevels: [],
+      daily: { v: 2, day: 3, weeks: 2, lastDay: Math.floor(now / 86400000), shownDay: Math.floor(now / 86400000) },
+      timed: { count: 3, stamp: now, last: now - 200000, opened: 140 }, freeTaken: { window: 0, ids: [] }
+    }));
+    localStorage.setItem('wikster.wallet.v1', '123456');
+    localStorage.setItem('wikster.ink.v1', '9876');
+    localStorage.setItem('wikster.collection.v3', JSON.stringify({ entries }));
+    localStorage.setItem('wikster.inventory.v1', JSON.stringify(inventory));
+    localStorage.setItem('wikster.customPacks.v2', JSON.stringify([{ id: 'custom-minecraft-wiki', name: 'Minecraft', tagline: 'Minecraft Wiki', icon: 'wand', accent: '#4ade80', accent2: '#14532d', wiki }]));
+    localStorage.setItem('wikster.seenRelease.v1', seen);
+  };
+  const few = Object.fromEntries(Object.entries(entries).slice(0, 60));
+  const runs = [
+    ['phone', { viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true }, 'en', false],
+    ['small phone fr', { viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true }, 'fr', false],
+    ['landscape', { viewport: { width: 915, height: 412 }, isMobile: true, hasTouch: true }, 'en', false],
+    ['pc fr', { viewport: { width: 1440, height: 900 } }, 'fr', true]
+  ];
+  for (const [label, layout, lang, pc] of runs) {
+    const c = await browser.newContext({ serviceWorkers: 'block', deviceScaleFactor: 1, ...layout });
+    const p = await c.newPage();
+    p.on('pageerror', (e) => errors.push(e.message));
+    installStubs(p);
+    await p.addInitScript(seedCenter, { entries: few, inventory, wiki, seen: RELEASES.at(-1).id, lang, pc });
+    await p.goto(BASE, { waitUntil: 'domcontentloaded' });
+    await p.waitForTimeout(2600);
+    const shut = async () => {
+      for (let i = 0; i < 6; i++) {
+        const open = await p.evaluate(() => Boolean(document.querySelector('#sheet:not([hidden])') || document.querySelector('.drawer.is-open') || document.querySelector('.pc-menu:not([hidden])')));
+        if (!open) break;
+        await p.keyboard.press('Escape');
+        await p.waitForTimeout(400);
+      }
+    };
+    const go = async (screen) => {
+      await shut();
+      if (pc) await p.evaluate((s) => globalThis.wiksterPc?.screen(s), screen);
+      else if (screen.startsWith('tab:')) await p.evaluate((s) => document.querySelector(`.nav-item[data-tab="${s}"]`)?.click(), screen.slice(4));
+      else {
+        await p.evaluate(() => document.querySelector('#menu-btn')?.click());
+        await p.waitForTimeout(450);
+        await p.evaluate((s) => document.querySelector(`.drawer-link[data-link="${s}"]`)?.click(), screen);
+      }
+      await p.waitForTimeout(900);
+    };
+    const look = async (where, root) => {
+      const issues = await p.evaluate(centerAudit, root);
+      record(`centering ${label} ${where}`, { issues, blank: null, pageScroll: false });
+      if (SHOTS && issues.length) await p.screenshot({ path: `${SHOTS}/centering-${label.replace(/\W+/g, '-')}-${where.replace(/\W+/g, '-')}.png` });
+    };
+    const screenRoot = pc ? '#pc' : '.screen.is-active, .appbar';
+    await shut();
+    for (const screen of pc ? ALL_SCREENS : ['tab:shop', 'tab:timed', 'tab:packs', 'tab:binder', 'tab:profile', ...DRAWER]) {
+      await go(screen);
+      await look(screen.replace('tab:', ''), screenRoot);
+    }
+    const sheet = '#sheet:not([hidden]) .sheet-panel';
+    const sheets = [
+      ['card window', async () => { await go(pc ? 'binder' : 'tab:binder'); if (!pc) { await p.evaluate(() => document.querySelectorAll('#binder-seg .seg-option')[2]?.click()); await p.waitForTimeout(700); } await p.locator(pc ? '.pck-card .card' : '.screen.is-active .card').first().click(); }],
+      ['pull rates', async () => { await go(pc ? 'packs' : 'tab:packs'); await p.evaluate(() => (document.querySelector('.screen.is-active #odds-btn, #pc .pcb-odds, #pc [data-odds]') ?? [...document.querySelectorAll('#pc button')].find((b) => /odds|chances|taux/i.test(b.textContent + (b.getAttribute('aria-label') ?? ''))))?.click()); }],
+      ...(pc ? [] : [['help', async () => { await go('tab:shop'); await p.evaluate(() => [...document.querySelectorAll('.help-btn')].find((b) => b.checkVisibility())?.click()); }]]),
+      ['erase everything', async () => { await go(pc ? 'settings' : 'settings'); await p.evaluate(() => window.__wikster.resetAll()); }],
+      ['sell confirm', async () => {
+        if (pc) await go('selling');
+        else { await go('tab:binder'); await p.evaluate(() => document.querySelectorAll('#binder-modes button')[1]?.click()); await p.waitForTimeout(900); }
+        await p.evaluate(() => [...document.querySelectorAll('.screen.is-active [data-act="all"], #pc [data-act="all"]')].find((b) => b.checkVisibility())?.click());
+        await p.waitForTimeout(400);
+        await p.evaluate(() => [...document.querySelectorAll('.sell-go')].find((b) => b.checkVisibility())?.click());
+      }],
+      ...(pc ? [['delete a custom booster', async () => { await go('custom'); await p.evaluate(() => [...document.querySelectorAll('.pcb-bar .pcx-seg-item')].filter((b) => b.checkVisibility())[1]?.click()); await p.waitForTimeout(900); await p.evaluate(() => [...document.querySelectorAll('.pcc-delete')].find((b) => b.checkVisibility())?.click()); }]] : []),
+      ['ink counter', async () => { await go('atelier'); await p.evaluate(() => [...document.querySelectorAll('#atelier-exchange, .atelier-banner .btn, #pc .pc-side .btn')].find((b) => b.checkVisibility())?.click()); }]
+    ];
+    for (const [where, enter] of sheets) {
+      await enter().catch(() => {});
+      await p.waitForTimeout(900);
+      if (!(await p.evaluate(() => Boolean(document.querySelector('#sheet:not([hidden])'))))) { record(`centering ${label} ${where}`, { issues: ['the sheet did not open'], blank: null, pageScroll: false }); continue; }
+      await look(where, sheet);
+      await shut();
+    }
+    await c.close();
   }
 }
 if (!ONLY || ONLY.includes('frames')) {

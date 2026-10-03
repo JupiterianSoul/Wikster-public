@@ -4,7 +4,7 @@ import { mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
 
 const MODES = {
-  app: 'offline', browsersguest: 'offline', games: 'offline', offline: 'offline', product: 'offline', arcade2: 'offline', desk: 'offline', atelier: 'offline', pc: 'offline', fit: 'offline', dangerlocal: 'offline', customtheme: 'offline', opening: 'offline', perf: 'offline', tabs: 'offline', collection: 'offline', intro: 'offline',
+  app: 'offline', browsersguest: 'offline', centering: 'offline', games: 'offline', offline: 'offline', product: 'offline', arcade2: 'offline', desk: 'offline', atelier: 'offline', pc: 'offline', fit: 'offline', dangerlocal: 'offline', customtheme: 'offline', opening: 'offline', perf: 'offline', tabs: 'offline', collection: 'offline', intro: 'offline',
   browsers: 'stub', fixes6: 'stub', economy: 'stub', worldclock: 'stub', facetoface: 'stub', g4: 'stub', sync: 'stub', live: 'stub', clubs: 'stub', seasons: 'stub', versus: 'stub', notices: 'stub', gifts: 'stub', safety: 'stub', slow: 'stub', control: 'stub', liveops: 'stub', instant: 'stub', claims: 'stub', inbox: 'stub', market: 'stub', danger: 'stub', appearance: 'stub', days: 'stub', recovery: 'stub', friends: 'stub', hellfire: 'stub', wankel: 'stub', erdtree: 'stub', solocode: 'stub', regalia: 'stub'
 };
 const PORT = Number(process.env.PORT) || 4173;
@@ -18,7 +18,7 @@ const args = process.argv.slice(2);
 const asked = args.length === 0 ? Object.keys(MODES)
   : args.every((a) => a === 'stub' || a === 'offline') ? Object.keys(MODES).filter((n) => args.includes(MODES[n]))
     : args;
-const SLOW = ['fit', 'atelier', 'app', 'facetoface', 'instant', 'inbox', 'pc', 'notices', 'safety'];
+const SLOW = ['fit', 'centering', 'atelier', 'app', 'facetoface', 'instant', 'inbox', 'pc', 'notices', 'safety'];
 const shard = /^(\d+)\/(\d+)$/.exec(process.env.SHARD ?? '');
 const wanted = shard
   ? [...asked.filter((n) => SLOW.includes(n)), ...asked.filter((n) => !SLOW.includes(n))].filter((_, i) => i % Number(shard[2]) === Number(shard[1]) - 1)

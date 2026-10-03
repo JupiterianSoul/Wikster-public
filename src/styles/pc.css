@@ -445,7 +445,7 @@ html.is-pc.is-immersive .pc-legacy > #app { mask-image: none; }
   text-align: left;
   transition: transform calc(140ms * var(--motion-scale)) var(--ease), border-color calc(140ms * var(--motion-scale)) var(--ease);
 }
-.pc-menu-item:hover, .pc-menu-item:focus-visible { border-color: var(--accent); transform: translateX(0.25rem); outline: none; }
+.pc-menu-item:hover, .pc-menu-item:focus-visible { border-color: var(--accent); transform: scale(1.015); outline: none; }
 .pc-menu-item:first-child { background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff 12%), var(--accent)); color: var(--accent-ink); border-color: transparent; }
 .pc-menu-icon svg { width: 1.2rem; height: 1.2rem; display: block; }
 .pc-menu-scale {
@@ -1144,7 +1144,7 @@ html[data-lowpower='1'] .pch-daily.is-ready .pch-daily-mark::after { animation: 
   place-items: center;
   width: 2rem;
   height: 2rem;
-  margin: -0.2rem -0.2rem 0 0;
+  margin: -0.2rem 0 0;
   border: var(--pcx-rim-soft);
   border-radius: 50%;
   background: transparent;
@@ -1153,7 +1153,7 @@ html[data-lowpower='1'] .pch-daily.is-ready .pch-daily-mark::after { animation: 
   transition: color calc(160ms * var(--motion-scale)) var(--ease), border-color calc(160ms * var(--motion-scale)) var(--ease);
 }
 .pcc-delete:hover, .pcc-delete:focus-visible { color: var(--negative); border-color: var(--negative); }
-.pcc-delete svg { width: 1rem; height: 1rem; }
+.pcc-delete svg { display: block; width: 1rem; height: 1rem; }
 .pcc-wiki.is-off { display: grid; align-content: center; gap: 0.6rem; min-height: 9rem; text-align: left; }
 .pcc-confirm-text { color: var(--ink-dim); line-height: 1.5; }
 .pcc-confirm { display: grid; gap: 0.6rem; margin-top: 1.1rem; }
@@ -1609,7 +1609,7 @@ html[data-lowpower='1'] .booster.is-pc-detail, html[data-lowpower='1'] .booster.
   color: var(--ink-dim);
   transition: background calc(160ms * var(--motion-scale)) var(--ease), color calc(160ms * var(--motion-scale)) var(--ease), transform calc(160ms * var(--motion-scale)) var(--ease);
 }
-.pcs-link:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); transform: translateX(0.2rem); }
+.pcs-link:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 5%, transparent); }
 .pcs-link.is-on { color: var(--ink); background: var(--pcx-glass-2); border-color: color-mix(in srgb, var(--line) 80%, transparent); box-shadow: var(--pcx-hi), var(--pcx-drop); }
 .pcs-link.is-on::before { content: ''; position: absolute; left: -0.6rem; top: 50%; width: 0.55rem; height: 0.55rem; margin-top: -0.275rem; border-radius: 1px; transform: rotate(45deg); background: var(--accent); box-shadow: 0 0 0.7rem var(--accent); }
 .pcs-link-icon { display: grid; place-items: center; width: 2.2rem; height: 2.2rem; border-radius: calc(var(--pcx-r) * 0.8); background: var(--pcx-well); color: var(--accent-text, var(--accent)); }
@@ -1632,6 +1632,10 @@ html[data-lowpower='1'] .booster.is-pc-detail, html[data-lowpower='1'] .booster.
 .pcs-page.is-spot > * { width: min(100%, 100rem); }
 .pcs-row { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 2.4rem; }
 .pcs-row > .pcs-group { flex: var(--n, 1) 1 calc((var(--n, 1) - 1) * 1.1rem); min-width: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+.pcx-heading > .pcx-title { min-width: 0; }
+.pcs-row > .pcs-group > .pcx-heading .pcx-title { overflow: hidden; text-overflow: ellipsis; }
+.pcs-row > .pcs-group > .pcx-heading .pcx-rule { min-width: 0; }
+.pcc-forge .pcx-heading .pcx-title { white-space: normal; text-wrap: balance; }
 .pcs-row .pcs-tiles { flex-wrap: nowrap; align-items: stretch; }
 .pcs-row .pcs-tiles > .shop-tile { flex: 1 1 0; width: auto; min-width: 0; --tile-w: min(100cqw, calc(14rem * var(--shop-k, 1))); }
 .pcs-row .shop-tile-name { min-height: calc(2.4em); display: grid; align-items: center; }
@@ -2074,8 +2078,10 @@ html.is-pc { --sw-w: 3.4rem; --sw-h: 2rem; }
 :where(.is-pc) :is(.settings-list, .glossary-list, .ach-list) { max-width: 51.25rem; }
 :where(.is-pc) :is(.screen-head, .section-head, .screen-sub, .tl-list) { max-width: 56.25rem; }
 :where(.is-pc) .market-search { max-width: 32.5rem; }
-:where(.is-pc) :is(.btn-block, .buy, #next-reward .reward-card) { max-width: 26.25rem; }
+:where(.is-pc) :is(.btn-block, .buy), :where(.is-pc #next-reward) .reward-card { max-width: 26.25rem; }
 :where(.is-pc) .gate-form .btn-block { max-width: none; }
+:where(.is-pc #sheet) :is(.btn-block, .buy) { margin-inline: auto; }
+:where(.is-pc #sheet) form .btn-block { max-width: none; }
 :where(.is-pc) .shop-feature { max-width: 56.25rem; }
 :where(.is-pc) .album-book-wrap { max-width: 53.75rem; }
 .is-pc #screen-quests .quests-shell { max-width: none; }
@@ -2097,7 +2103,8 @@ html.is-pc { --sw-w: 3.4rem; --sw-h: 2rem; }
 .is-pc #app .theme-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; }
 .is-pc #app .theme-grid > * { flex: 0 0 13.4rem; }
 .is-pc #app .showcase-grid { grid-template-columns: repeat(5, minmax(0, 11rem)); justify-content: center; gap: 1.6rem; padding: 0; }
-.is-pc #screen-profile .pc-side .hero-id { gap: 2.4rem; padding-left: 1.4rem; }
+.is-pc #screen-profile .pc-side .hero-id { flex-direction: column; gap: 0.8rem; padding-left: 0; text-align: center; }
+.is-pc #screen-profile .pc-side .hero-id > .ring { margin: 0.4rem 0 0; }
 .is-pc #screen-profile .pc-side .hero-card { overflow: visible; }
 .is-pc #app .stat-grid { grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); }
 .is-pc #app .badge-grid:not(.is-all) { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.2rem 2rem; }
@@ -2203,7 +2210,7 @@ html.is-pc { --sw-w: 3.4rem; --sw-h: 2rem; }
 .is-pc .claim-bar-mark { width: 2.8rem; height: 2.8rem; }
 .is-pc .claim-bar-copy { font-size: 1rem; }
 .is-pc .claim-bar .claim-all { min-height: 3rem; padding-inline: 1.4rem; max-width: none; }
-.is-pc #app .pc-group .theme-grid { justify-content: flex-start; }
+.is-pc #app .pc-group .theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(13.4rem, 1fr)); }
 .is-pc #app .showcase-grid { justify-content: start; }
 .is-pc #app .section-head { width: 100%; }
 .is-pc #screen-guilds :is(#guild-join, .section-head:has(#guild-board-label), #guild-board) { width: 100%; max-width: 52rem; margin-inline: auto; }

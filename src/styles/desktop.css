@@ -119,6 +119,7 @@
   .forge > p { max-width: 68ch; }
   .market-search { max-width: 520px; }
   .seg-wrap { justify-content: flex-start; }
+  .gate-card .seg-wrap { justify-content: center; }
   .btn-block, .buy { max-width: 420px; }
   .rarity-bars, .empty-note, .find-status { max-width: 860px; }
   .xp-line, #xp-bar, .level-bar { max-width: 860px; }
@@ -421,7 +422,9 @@
   .sheet-body .level-jump .bar { max-width: 220px; }
   .sheet-body .level-reward { display: grid; justify-items: center; }
   .sheet-body .level-reward .reward-card { width: min(420px, 100%); }
-  .sheet-body > .btn-block { display: flex; margin-inline: auto; }
+  .sheet-body > .btn-block { display: flex; }
+  .sheet-body :is(.btn-block, .buy) { margin-inline: auto; }
+  .sheet-body form .btn-block { max-width: none; }
   .sheet-body .daily-week { max-width: 520px; margin-inline: auto; }
   .sheet-body .crop-stage, .sheet-body .crop-zoom, .sheet-body .crop-preview-row { margin-inline: auto; }
 }
