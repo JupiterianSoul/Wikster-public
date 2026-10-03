@@ -44,8 +44,8 @@ useFinderCache({
   }
 });
 useArticlePool({
-  draw: (pool: string, n: number, opts: { low: number; stale: number; kind: string }) =>
-    rpc('wiki_pool_draw', { p_pool: pool, p_n: n, p_low: opts.low, p_stale: opts.stale, p_kind: opts.kind }),
+  draw: (pool: string, n: number, opts: { low: number; stale: number; kind: string; user?: string | null; rotate?: boolean }) =>
+    rpc('wiki_pool_draw', { p_pool: pool, p_n: n, p_low: opts.low, p_stale: opts.stale, p_kind: opts.kind, p_user: opts.user ?? null, p_rotate: Boolean(opts.rotate) }),
   fill: (pool: string, kind: string, cards: unknown[], max: number) =>
     rpc('wiki_pool_fill', { p_pool: pool, p_kind: kind, p_cards: cards, p_max: max }),
   fail: (pool: string) => rpc('wiki_pool_fail', { p_pool: pool }),

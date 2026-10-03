@@ -362,7 +362,7 @@ async function mergedTimedCards(ctx, spec, pack, options) {
   const base = { ...spec, cards: Math.max(1, Math.round((Number(spec.cards) || slots) / slots)), timedSlots: 1 };
   const basePack = toDrawPack(base);
   if (pack.safe) basePack.safe = true;
-  const sets = (await ctx.drawMany(basePack, slots, options).catch(() => [])).filter((set) => Array.isArray(set) && set.length);
+  const sets = (await ctx.drawMany(basePack, slots, { ...options, random: ctx.random, user: ctx.user ?? null }).catch(() => [])).filter((set) => Array.isArray(set) && set.length);
   const sub = memoOverrides(ctx, [...new Set(sets.flat().map((a) => a?.key).filter(Boolean))]);
   const out = [];
   for (const set of sets) {
@@ -448,7 +448,7 @@ export async function drawPulls(ctx, id, spec, n, options = {}) {
   const { pack } = await drawSetup(ctx, spec);
   const started = Date.now();
   let missed = null;
-  const sets = (await ctx.drawMany(pack, count, { ...options, random: ctx.random }).catch((error) => { missed = drawError(error); return []; })).filter((set) => Array.isArray(set) && set.length);
+  const sets = (await ctx.drawMany(pack, count, { ...options, random: ctx.random, user: ctx.user ?? null }).catch((error) => { missed = drawError(error); return []; })).filter((set) => Array.isArray(set) && set.length);
   if (!sets.length) throw missed ?? new EconError('DRAW_FAILED');
   const sub = memoOverrides(ctx, [...new Set(sets.flat().map((a) => a?.key).filter(Boolean))]);
   const finished = [];

@@ -189,7 +189,7 @@ export async function drawArticlesMany(pack, n, options = {}) {
   takeRequestCount();
   const safe = pack.safe === true || Boolean(safeDefault());
   try {
-    const pooled = await drawFromPool(pack, count, { safe, random: options.random, live: options.poolOnly ? null : (m) => drawManyOnce(pack, m, options) });
+    const pooled = await drawFromPool(pack, count, { safe, random: options.random, user: options.user ?? null, live: options.poolOnly ? null : (m) => drawManyOnce(pack, m, options) });
     if (pooled) return pooled.map((set) => set.filter((card) => cardAllowed(card, { safe }))).filter((set) => set.length);
     const sets = (await drawManyOnce(pack, count, options)).filter((set) => Array.isArray(set) && set.length);
     const seen = new Set(sets.flat().map((card) => card.key));
