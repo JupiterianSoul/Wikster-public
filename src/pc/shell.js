@@ -291,7 +291,7 @@ export function paintHud() {
   pc.ring.set(levelFraction(progress), String(level));
   pc.plateLevel.textContent = String(level);
   paintFrameInto(pc.plateRing, frameStyle(), frameTier(level));
-  if (me) paintAvatarInto(pc.plateFace, { ...me, level });
+  if (me) paintAvatarInto(pc.plateFace, { ...me, level }, { frame: { style: null, tier: 0 } });
   else pc.plateFace.replaceChildren(h('span.pc-plate-initial', (t('pcGuest')[0] ?? '?').toUpperCase()));
   for (const tab of pc.tabs.querySelectorAll('.pc-tab')) {
     const n = counts[tab.dataset.dest] ?? 0;

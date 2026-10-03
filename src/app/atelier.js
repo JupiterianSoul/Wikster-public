@@ -6,7 +6,7 @@ import { synth } from '../ui/sound.js';
 import { iconSvg } from '../data/icons.js';
 import { press } from '../ui/components.js';
 import { DEFAULT_THEME, THEMES } from '../ui/themes.js';
-import { FRAME_GRADES, INK_FRAMES } from '../frames.js';
+import { FRAME_GRADES, INK_FRAMES, frameGrade } from '../frames.js';
 import { RARITIES, rarityText } from '../data/rarities.js';
 import { DEFAULT_FX, FX_BY_RARITY } from '../data/fx.js';
 import { BOOSTER_LOOKS, OPENINGS } from '../data/looks.js';
@@ -158,39 +158,29 @@ export function openCustomEditor() {
 
 function paintFrames() {
   const wearing = frameStyle();
-  const grades = FRAME_GRADES.map((grade) => ({ grade, frames: INK_FRAMES.filter((f) => f.grade === grade.id) }))
-    .filter((g) => g.frames.length)
-    .sort((a, b) => a.frames[0].price - b.frames[0].price);
-  const note = document.createElement('p');
-  note.className = 'frames-note frame-shop-note';
-  note.textContent = t('atelierFrameNote');
-  el.atelierFrames.replaceChildren(note, ...grades.map(({ grade, frames }) => {
-    const group = document.createElement('div');
-    group.className = 'fx-tier frame-grade';
-    group.dataset.grade = grade.id;
-    group.style.setProperty('--grade', grade.color);
-    group.innerHTML = `<div class="fx-tier-head"><span class="grade-chip"></span><span class="fx-tier-count tabular"></span></div><div class="frame-grid"></div>`;
-    group.querySelector('.grade-chip').textContent = tx(grade.name);
-    group.querySelector('.fx-tier-count').innerHTML = t('atelierFxPrice', { price: ink(frames[0].price) });
-    group.querySelector('.frame-grid').replaceChildren(...frames.map((style) => {
-      const owned = ownsFrame(state.profile, style.id);
-      const card = document.createElement('div');
-      card.className = `frame-card frame-tile atelier-tile${owned ? ' is-owned' : ''}${style.id === wearing ? ' is-on' : ''}`;
-      card.dataset.frame = style.id;
-      card.dataset.grade = grade.id;
-      card.innerHTML = `<span class="frame-copy"><h4></h4><span class="grade-chip is-small"></span></span>
-        <span class="theme-check">${iconSvg('check', { size: 14 })}</span>`;
-      card.prepend(frameStage(style.id, { size: 56, width: 4 }));
-      card.querySelector('h4').textContent = tx(style.name);
-      card.querySelector('.grade-chip').textContent = tx(grade.name);
-      card.appendChild(priceButton({
-        owned, price: style.price, worn: style.id === wearing,
-        buy: () => buy('frames', style.id, style.price, tx(style.name)),
-        wear: () => { pickFrameStyle(style.id); toast(t('frameEquipped', { name: tx(style.name) })); renderAtelier(); }
-      }));
-      return card;
+  const note = document.getElementById('atelier-frames-note');
+  if (note) note.textContent = t('atelierFrameNote');
+  const rank = (style) => FRAME_GRADES.findIndex((g) => g.id === style.grade);
+  const frames = [...INK_FRAMES].sort((a, b) => a.price - b.price || rank(a) - rank(b));
+  el.atelierFrames.replaceChildren(...frames.map((style) => {
+    const grade = frameGrade(style);
+    const owned = ownsFrame(state.profile, style.id);
+    const card = document.createElement('div');
+    card.className = `frame-card frame-tile atelier-tile${owned ? ' is-owned' : ''}${style.id === wearing ? ' is-on' : ''}`;
+    card.dataset.frame = style.id;
+    card.dataset.grade = grade.id;
+    card.style.setProperty('--grade', grade.color);
+    card.innerHTML = `<span class="frame-copy"><h4></h4><span class="grade-chip is-small"></span></span>
+      <span class="theme-check">${iconSvg('check', { size: 14 })}</span>`;
+    card.prepend(frameStage(style.id, { size: 56, width: 4 }));
+    card.querySelector('h4').textContent = tx(style.name);
+    card.querySelector('.grade-chip').textContent = tx(grade.name);
+    card.appendChild(priceButton({
+      owned, price: style.price, worn: style.id === wearing,
+      buy: () => buy('frames', style.id, style.price, tx(style.name)),
+      wear: () => { pickFrameStyle(style.id); toast(t('frameEquipped', { name: tx(style.name) })); renderAtelier(); }
     }));
-    return group;
+    return card;
   }));
 }
 

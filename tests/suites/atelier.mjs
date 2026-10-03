@@ -72,7 +72,15 @@ check('fourteen frames on the shelf', await p.locator('#atelier-frames .frame-ca
 check('each shown on the player\'s own level ring, with its name, grade and price', await p.evaluate(() => [...document.querySelectorAll('#atelier-frames .frame-card')].every((c) =>
   c.querySelector('.frame-stage.ring .ring-label')?.textContent === String(window.__wikster.state.profile.progress.level ?? 1)
   && c.querySelector('.frame-stage .frame-overlay svg.fr') && c.querySelector('h4').textContent && c.querySelector('.grade-chip').textContent && c.querySelector('.atelier-buy'))));
-check('grouped by grade, cheapest first', await p.evaluate(() => [...document.querySelectorAll('#atelier-frames .frame-grade')].map((g) => g.dataset.grade).join()) === 'rare,epic,legendary');
+check('ordered by grade, cheapest first', await p.evaluate(() => [...new Set([...document.querySelectorAll('#atelier-frames .frame-card')].map((c) => c.dataset.grade))].join()) === 'rare,epic,legendary');
+await p.locator('#atelier-frames .frame-card').last().scrollIntoViewIfNeeded();
+await p.waitForTimeout(400);
+check('the last frame can be scrolled to and bought', await p.evaluate(() => {
+  const card = [...document.querySelectorAll('#atelier-frames .frame-card')].at(-1);
+  const btn = card.querySelector('.atelier-buy').getBoundingClientRect();
+  const hit = document.elementFromPoint(btn.left + btn.width / 2, btn.top + btn.height / 2);
+  return btn.top >= 0 && btn.bottom <= innerHeight && card.contains(hit);
+}));
 const BOUGHT = ALL_FX.length - 1;
 check('every board design is on the shelf, on its own tier',
   await p.locator('#atelier-fx .fx-chip').count() === BOUGHT && await p.locator('#atelier-fx .fx-tier').count() === 8, String(BOUGHT));
