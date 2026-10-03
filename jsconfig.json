@@ -1,0 +1,46 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "skipLibCheck": true,
+    "types": [
+      "vite/client"
+    ],
+    "baseUrl": "."
+  },
+  "include": [
+    "src/daily.js",
+    "src/data/odds.js",
+    "src/data/rarities.js",
+    "src/duel.js",
+    "src/economy.js",
+    "src/pricing.js",
+    "src/progression.js",
+    "src/reveal.js",
+    "src/save.js",
+    "src/sensitive.js",
+    "src/ui/bus.js",
+    "src/ui/dom.js",
+    "src/version.js",
+    "src/wikdle.js",
+    "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "tests",
+    "android"
+  ]
+}
