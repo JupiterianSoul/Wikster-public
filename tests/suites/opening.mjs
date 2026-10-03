@@ -366,6 +366,82 @@ section('a draw still on its way keeps the equipped opening in suspense');
   await ctx.close();
 }
 
+section('the cards of an equipped opening are already their real size');
+const watchGhosts = (p) => p.evaluate(() => {
+  window.__ghost = { w: [], last: null, roots: 0 };
+  new MutationObserver((list) => { for (const m of list) for (const n of m.addedNodes) if (n.classList?.contains('ofx-root')) window.__ghost.roots++; }).observe(document.body, { childList: true });
+  const tick = () => {
+    const gs = [...document.querySelectorAll('.ofx-card')];
+    if (gs.length) {
+      window.__ghost.w.push(gs[0].offsetWidth);
+      window.__ghost.last = gs.map((g) => { const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+    }
+    if (!document.querySelector('#screen-open').classList.contains('phase-reveal')) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+});
+for (const where of [{ name: 'phone' }, { name: 'computer, table view', pc: true, settings: { spreadOpen: true } }, { name: 'computer, stack view, 1280x720 at 1.4', pc: true, viewport: { width: 1280, height: 720 }, scale: 1.4, settings: { spreadOpen: false } }]) {
+  const { ctx, p } = await open({ count: 2, pc: where.pc, opening: 'tearstrip', settings: where.settings ?? {}, viewport: where.viewport, scale: where.scale ?? 1 });
+  if (where.pc) await p.evaluate(() => document.querySelector('#packs-open')?.click());
+  else { await toShelf(p); await p.locator('#packs-open').click(); }
+  await idle(p);
+  await p.waitForTimeout(700);
+  await watchGhosts(p);
+  await p.evaluate(() => document.querySelector('#screen-open .rip-zone').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await reveal(p);
+  await p.waitForTimeout(900);
+  const g = await p.evaluate(() => window.__ghost);
+  const real = await p.evaluate(() => [...document.querySelectorAll('#card-stack .stack-card')].map((c) => { const r = c.getBoundingClientRect(); return { w: c.offsetWidth, h: c.offsetHeight, x: r.left + r.width / 2, y: r.top + r.height / 2 }; }));
+  const w = real[0]?.w ?? 0;
+  const sizes = [...new Set(g.w)];
+  check(`${where.name}: the opening plays`, g.roots === 1 && g.w.length > 0);
+  check(`${where.name}: its cards are the size they are shown at`, sizes.length > 0 && sizes.every((v) => Math.abs(v - w) <= w * 0.04), `${sizes.join(',')} vs ${w}`);
+  const off = (g.last ?? []).map((c, i) => Math.max(Math.abs(c.x - real[i].x), Math.abs(c.y - real[i].y)));
+  check(`${where.name}: and land where the cards lie, no jump at the reveal`, off.length === real.length && off.every((d) => d <= real[0].h * 0.07), off.map(Math.round).join(','));
+  await ctx.close();
+}
+
+section('open all deals its cards when the animation is on');
+for (const pc of [false, true]) {
+  const where = pc ? 'computer' : 'phone';
+  const { ctx, p } = await open({ count: 4, pc });
+  if (pc) await p.locator('.pch-actions button', { hasText: 'Open all 4' }).click();
+  else { await toShelf(p); await p.locator('#packs-open-all').click(); }
+  await idle(p);
+  await p.evaluate(() => {
+    window.__deal = { scraps: 0, flying: 0 };
+    new MutationObserver((list) => {
+      for (const m of list) {
+        for (const n of m.addedNodes) if (n.classList?.contains('tear-scrap')) window.__deal.scraps++;
+        if (m.type === 'attributes' && m.target.classList?.contains('is-flying')) window.__deal.flying++;
+      }
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
+  await p.evaluate(() => document.querySelector('#screen-open .rip-zone').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await reveal(p);
+  await p.waitForTimeout(2600);
+  const d = await p.evaluate(() => window.__deal);
+  check(`${where}: open all tears the pack`, d.scraps >= 1, JSON.stringify(d));
+  check(`${where}: and deals the cards out of it`, d.flying >= 10, JSON.stringify(d));
+  check(`${where}: every card ends in its place`, await p.locator('#card-stack .stack-card').count() === 20 && await p.evaluate(() => [...document.querySelectorAll('#card-stack .stack-card')].every((c) => !c.getAnimations().some((a) => a.playState === 'running') && getComputedStyle(c).opacity === '1')));
+  await ctx.close();
+}
+{
+  const { ctx, p } = await open({ count: 1 });
+  await p.evaluate(() => window.__wikster.giveTimed(3));
+  await p.evaluate(() => window.__wikster.boosters.openAllTimed());
+  await idle(p);
+  await p.evaluate(() => {
+    window.__deal = { emerging: 0 };
+    new MutationObserver((list) => { for (const m of list) if (m.target.classList?.contains('is-emerging')) window.__deal.emerging++; }).observe(document.querySelector('#card-stack'), { subtree: true, attributes: true, attributeFilter: ['class'] });
+  });
+  const cards = await p.evaluate(() => window.__wikster.state.spec.cards);
+  await p.evaluate(() => document.querySelector('#screen-open .rip-zone').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await reveal(p);
+  check('timed open all deals every card of the free boosters', cards >= 6 && await p.evaluate(() => window.__deal.emerging) >= cards, `${await p.evaluate(() => window.__deal.emerging)} of ${cards}`);
+  await ctx.close();
+}
+
 section('the results of a big open all can be scrolled to the last card');
 const BIG_ID = 'theme|animals|std|5';
 const lastReachable = (p, sel) => p.evaluate((sel) => {

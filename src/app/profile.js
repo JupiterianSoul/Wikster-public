@@ -3,9 +3,8 @@ import { withSpecialPhoto } from '../codedefs.js';
 import { MAX_LEVEL, levelFraction, rankFor, rewardForLevel, xpForLevel } from '../progression.js';
 import { paintRingFace } from './social.js';
 import { frameTier } from '../frames.js';
-import { getLanguage, t, tx } from '../i18n.js';
+import { t, tx } from '../i18n.js';
 import * as store from '../collection.js';
-import { formatAmount } from '../pricing.js';
 import { evaluate as evaluateAchievements } from '../achievements.js';
 import * as account from '../account.js';
 import { RARITIES, rarityById, rarityOfCard, rarityRank, rarityText } from '../data/rarities.js';
@@ -19,9 +18,9 @@ import { signedIn, userId } from './gate.js';
 import { live } from './live.js';
 import { rewardCard } from './open.js';
 import { achFacts, frameStyle, paintFrameInto, renderBadges } from './regalia.js';
-import { collectionValue } from '../econ/rules.js';
 import { ownAppearance, wearLook } from './lookview.js';
 import { markThumb } from './mature.js';
+import { paintOwnStatsBoard } from './statsboard.js';
 
 export function formatDuration(ms) {
   const minutes = Math.floor(ms / 60000);
@@ -33,7 +32,7 @@ export function formatDuration(ms) {
 }
 
 export function paintPlaytime() {
-  const cell = el.statGrid?.querySelector('[data-stat="playtime"] b');
+  const cell = el.statGrid?.querySelector('[data-stat="playtime"] > b');
   if (cell) cell.textContent = formatDuration(state.profile.playMs ?? 0);
 }
 
@@ -67,29 +66,9 @@ export function renderProfile() {
   el.statsLabel.textContent = t('profileStats');
   freshOwnStats();
   paintOwnStamp();
-  const entries = store.allEntries(state.collection);
-  const pulled = Object.values(rarityCounts).reduce((sum, n) => sum + n, 0);
-
-  const stats = [
-    [t('statPlaytime'), formatDuration(state.profile.playMs ?? 0)],
-    [t('statAccountAge'), new Date(state.profile.createdAt ?? Date.now())
-      .toLocaleDateString(getLanguage(), { year: 'numeric', month: 'short', day: 'numeric' })],
-    [t('statBoosters'), (state.profile.boostersOpened ?? 0).toLocaleString()],
-    [t('statCards'), pulled.toLocaleString()],
-    [t('statValue'), formatAmount(collectionValue(entries))],
-    [t('statAchievements'), String(evaluateAchievements(achFacts(),
-      state.profile.achievements?.redeemed ?? []).filter((a) => a.unlocked).length)],
-    ...(account.configured ? [[t('statFriends'), String(state.social.friends.length)]] : [])
-  ];
-  el.statGrid.replaceChildren(...stats.map(([label, value], i) => {
-    const cell = document.createElement('div');
-    cell.className = 'stat-cell';
-    if (i === 0) cell.dataset.stat = 'playtime';
-    cell.innerHTML = '<b></b><span></span>';
-    cell.querySelector('b').textContent = value;
-    cell.querySelector('span').textContent = label;
-    return cell;
-  }));
+  const facts = achFacts();
+  const achList = evaluateAchievements(facts, state.profile.achievements?.redeemed ?? []);
+  paintOwnStatsBoard(el.statGrid, { facts, achDone: achList.filter((a) => a.unlocked).length, achTotal: achList.length });
 
   el.rarityLabel.textContent = t('statRarity');
   const peak = Math.max(1, ...RARITIES.map((r) => rarityCounts[r.id] ?? 0));

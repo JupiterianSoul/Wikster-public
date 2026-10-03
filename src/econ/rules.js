@@ -2,6 +2,7 @@ import { RARITIES, normalizeRarityId, rarityById, rarityRank } from '../data/rar
 import { priceFor } from '../pricing.js';
 import { tune } from '../live.js';
 import { timedDrawCaps } from '../timed.js';
+import { utcDay, utcWeekIndex } from '../days.js';
 
 export const HIT_RANK = 1;
 export const PITY_RANK = 4;
@@ -80,6 +81,35 @@ export function noteOpen(list, nonce) {
 }
 
 export const openNoted = (list, nonce) => Array.isArray(list) && list.includes(String(nonce ?? '').slice(-12));
+
+export const PULL_WEEKS_KEPT = 12;
+
+const wholeOf = (v) => Math.max(0, Math.round(Number(v) || 0));
+
+export function notePulls(stats, cards, boosters, now) {
+  const prev = stats && typeof stats === 'object' && !Array.isArray(stats) ? stats : {};
+  const list = Array.isArray(cards) ? cards.filter((c) => c && !c.special) : [];
+  const n = wholeOf(boosters);
+  const value = list.reduce((sum, c) => sum + wholeOf(c.price), 0);
+  const day = utcDay(now);
+  const held = Array.isArray(prev.d) && prev.d[0] === day ? prev.d : [day, 0, 0];
+  const d = [day, wholeOf(held[1]) + n, wholeOf(held[2]) + value];
+  const week = utcWeekIndex(now);
+  const old = (Array.isArray(prev.w) ? prev.w : []).filter((w) => Array.isArray(w) && Number.isFinite(w[0]));
+  const was = old.find((w) => w[0] === week);
+  const w = [...old.filter((x) => x[0] !== week && x[0] > week - PULL_WEEKS_KEPT), [week, wholeOf(was?.[1]) + n, wholeOf(was?.[2]) + value]]
+    .sort((a, b) => a[0] - b[0]);
+  const luck = Array.isArray(prev.luck) && wholeOf(prev.luck[1]) >= d[2] ? prev.luck : [day, d[2], d[1]];
+  let top = prev.top && typeof prev.top === 'object' ? prev.top : null;
+  for (const c of list) {
+    const r = normalizeRarityId(c.rarityId ?? 'common');
+    const p = wholeOf(c.price);
+    if (!top || rarityRank(r) > rarityRank(top.r) || (rarityRank(r) === rarityRank(top.r) && p > wholeOf(top.p))) {
+      top = { r, k: String(c.key ?? ''), t: String(c.title ?? '').slice(0, 80), p, at: now };
+    }
+  }
+  return { since: Number(prev.since) || now, n: wholeOf(prev.n) + n, v: wholeOf(prev.v) + value, d, w, luck, ...(top ? { top } : {}) };
+}
 
 const bonus = (id) => Number(rarityById(id).bonusPct) || 0;
 

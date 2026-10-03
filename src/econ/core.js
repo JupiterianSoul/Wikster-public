@@ -12,7 +12,7 @@ export class EconError extends Error {
 export const ECON_KEYS = [
   'started', 'stipendWindow', 'stipendHour', 'createdAt', 'boostersOpened', 'rarityCounts', 'progress', 'pendingLevels',
   'daily', 'timed', 'freeTaken', 'shopStock', 'todayBought', 'achievements', 'codesRedeemed', 'cardsSold',
-  'fused', 'owned', 'albumTiers', 'seasons', 'seasonUnlocks', 'packsBuilt', 'eventsClaimed', 'liveBought', 'pity', 'opens', 'friendCodes', 'codeDefs'
+  'fused', 'owned', 'albumTiers', 'seasons', 'seasonUnlocks', 'packsBuilt', 'eventsClaimed', 'liveBought', 'pity', 'opens', 'friendCodes', 'codeDefs', 'pullStats'
 ];
 
 export const MAX_CUSTOM_PACKS = 24;

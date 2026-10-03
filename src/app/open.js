@@ -628,14 +628,27 @@ onOpenRefused((entry) => {
   if (!entry.cards.every((c) => state.collection.entries[c.article.key])) toast(esc(t('openNotSaved')), 'error');
 });
 
+function settleBooster(booster) {
+  if (!booster.classList.contains('is-idle')) return;
+  const pose = getComputedStyle(booster).transform;
+  booster.classList.remove('is-idle');
+  if (pose && pose !== 'none') booster.style.transform = pose;
+}
+
 async function runEffect(id, booster, cards = state.cards, extra = {}) {
-  const rect = booster.getBoundingClientRect();
+  for (const card of cards) card.style.transition = 'none';
+  void el.cardStack.offsetHeight;
+  const box = booster.getBoundingClientRect();
+  const packW = booster.offsetWidth || box.width;
+  const packH = booster.offsetHeight || box.height;
+  const rect = { left: box.left + (box.width - packW) / 2, top: box.top + (box.height - packH) / 2, width: packW, height: packH };
   const root = document.createElement('div');
   root.className = 'ofx-root';
   document.body.appendChild(root);
   const pack = booster.cloneNode(true);
   pack.querySelectorAll('.rip-zone, .booster-tear, .rip-front, .booster-mouth').forEach((n) => n.remove());
   pack.classList.remove('is-open', 'is-idle', 'is-tearing', 'is-bursting', 'is-leaving');
+  pack.style.removeProperty('transform');
   pack.style.setProperty('--pack-w', `${rect.width}px`);
   pack.style.setProperty('--pack-h', `${rect.height}px`);
   pack.style.width = `${rect.width}px`;
@@ -658,6 +671,7 @@ async function runEffect(id, booster, cards = state.cards, extra = {}) {
     card.classList.add('is-veiled');
     return ghost;
   });
+  for (const card of cards) card.style.transition = '';
   try {
     await playOpening(id, { ...extra, root, center, pack, packW: rect.width, packH: rect.height, cards: ghosts, targets });
   } finally {
@@ -745,15 +759,32 @@ function settleArrivals() {
 
 const DEAL_HEAD_MS = 260;
 
-function batchArrival(booster, count) {
-  state.cards = Array.from({ length: count }, (_, i) => buildPlaceholderCard(i, count));
-  for (const card of state.cards) card.classList.add('is-mini');
-  el.cardStack.scrollTop = 0;
-  el.cardStack.replaceChildren(...state.cards);
-  layoutDeck();
-  if (fastOpen()) return Promise.resolve();
-  state.cards.forEach((card, i) => {
-    card.style.animationDelay = `${Math.min(i * 18, 700)}ms`;
+const FLY_MAX = 40;
+
+function dealCards(cards, from) {
+  const box = el.cardStack.getBoundingClientRect();
+  let flown = 0;
+  let late = 0;
+  cards.forEach((card) => {
+    const r = card.getBoundingClientRect();
+    const seen = from && r.width > 0 && r.bottom > box.top && r.top < box.bottom && flown < FLY_MAX && typeof card.animate === 'function';
+    if (seen) {
+      const k = flown++;
+      const dx = from.x - (r.left + r.width / 2);
+      const dy = from.y - (r.top + r.height / 2);
+      const spin = (k % 2 ? 1 : -1) * (6 + (k % 5) * 3);
+      card.classList.add('is-flying');
+      const fly = card.animate([
+        { transform: `translate(${dx}px, ${dy}px) rotate(${spin}deg) scale(0.42)`, opacity: 0 },
+        { opacity: 1, offset: 0.18 },
+        { transform: `translate(${dx * 0.35}px, ${dy * 0.35 - 30}px) rotate(${spin * 0.4}deg) scale(0.8)`, offset: 0.55 },
+        { transform: 'none', opacity: 1 }
+      ], { duration: 560, delay: k * 32, easing: 'cubic-bezier(.2,.75,.2,1)', fill: 'backwards' });
+      const done = () => card.classList.remove('is-flying');
+      fly.finished.then(done, done);
+      return;
+    }
+    card.style.animationDelay = `${Math.min(FLY_MAX * 32 + late++ * 12, 1400)}ms`;
     card.classList.add('is-dealt');
     card.addEventListener('animationend', function done(event) {
       if (event.target !== card || event.animationName !== 'card-dealt') return;
@@ -762,12 +793,28 @@ function batchArrival(booster, count) {
       card.style.animationDelay = '';
     });
   });
+}
+
+function boosterPoint(booster) {
+  const r = booster?.getBoundingClientRect();
+  return r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height * 0.3 } : null;
+}
+
+function batchArrival(booster, count, from = null) {
+  state.cards = Array.from({ length: count }, (_, i) => buildPlaceholderCard(i, count));
+  for (const card of state.cards) card.classList.add('is-mini');
+  el.cardStack.scrollTop = 0;
+  el.cardStack.replaceChildren(...state.cards);
+  layoutDeck();
+  if (fastOpen()) return Promise.resolve();
+  dealCards(state.cards, from);
   return wait(DEAL_HEAD_MS);
 }
 
 const FX_LEAD_MAX = 12;
 
 async function batchEffect(booster, count, effect) {
+  const from = boosterPoint(booster);
   state.cards = Array.from({ length: count }, (_, i) => buildPlaceholderCard(i, count));
   for (const card of state.cards) card.classList.add('is-mini', 'is-veiled');
   el.cardStack.scrollTop = 0;
@@ -789,17 +836,8 @@ async function batchEffect(booster, count, effect) {
   }
   booster.classList.add('is-gone');
   const rest = state.cards.filter((card) => card.classList.contains('is-veiled'));
-  rest.forEach((card, i) => {
-    card.classList.remove('is-veiled');
-    card.style.animationDelay = `${Math.min(i * 14, 500)}ms`;
-    card.classList.add('is-dealt');
-    card.addEventListener('animationend', function done(event) {
-      if (event.target !== card || event.animationName !== 'card-dealt') return;
-      card.removeEventListener('animationend', done);
-      card.classList.remove('is-dealt');
-      card.style.animationDelay = '';
-    });
-  });
+  rest.forEach((card) => card.classList.remove('is-veiled'));
+  dealCards(rest, from);
 }
 
 async function layCards(booster, count, hold = null) {
@@ -807,6 +845,7 @@ async function layCards(booster, count, hold = null) {
     el.openScreen.classList.add('is-batch');
     const effect = !fastOpen() && wornOpening();
     if (effect) return batchEffect(booster, count, effect);
+    const from = boosterPoint(booster);
     if (!fastOpen()) {
       eruptPack(booster);
       await wait(190);
@@ -814,7 +853,7 @@ async function layCards(booster, count, hold = null) {
     } else {
       booster.classList.add('is-gone');
     }
-    return batchArrival(booster, count);
+    return batchArrival(booster, count, from);
   }
   if (fastOpen()) {
     state.cards = Array.from({ length: count }, (_, i) => buildPlaceholderCard(i, count));
@@ -867,7 +906,7 @@ export async function runOpen(booster) {
 
   el.openScreen.classList.replace('phase-idle', 'phase-opening');
   el.openHint.textContent = '';
-  booster.classList.remove('is-idle');
+  settleBooster(booster);
 
   const guarded = Promise.race([
     drawing,
@@ -991,7 +1030,7 @@ async function runLocalBatch(booster) {
 
   el.openScreen.classList.replace('phase-idle', 'phase-opening');
   el.openHint.textContent = '';
-  booster.classList.remove('is-idle');
+  settleBooster(booster);
 
   const drawing = drawMany(spec, n);
   const laying = layCards(booster, n * spec.cards);
@@ -1105,7 +1144,7 @@ function beginOpening(booster) {
   el.openScreen.classList.replace('phase-idle', 'phase-opening');
   el.openHint.textContent = '';
   el.openHint.className = 'open-hint';
-  booster.classList.remove('is-idle');
+  settleBooster(booster);
 }
 
 export function arrivingText() {
