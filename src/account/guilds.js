@@ -31,6 +31,17 @@ export async function myGuild() {
   return row?.id ? guildShape(row) : null;
 }
 
+export async function playerGuild(userId) {
+  if (!supabase) throw new Error('CLOSED');
+  const { data, error } = await withTimeout(supabase.from('guild_members')
+    .select('guild_id, guilds(name, tag)').eq('user_id', userId).limit(1));
+  if (error) throw named(error);
+  const row = data?.[0];
+  if (!row?.guild_id) return null;
+  const guild = Array.isArray(row.guilds) ? row.guilds[0] : row.guilds;
+  return { id: row.guild_id, name: guild?.name ?? '', tag: guild?.tag ?? '' };
+}
+
 export async function createGuild(name, tag, about = '') {
   const data = await call('create_guild', { p_name: name, p_tag: tag, p_about: about });
   return guildShape(Array.isArray(data) ? data[0] : data);

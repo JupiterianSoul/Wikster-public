@@ -103,6 +103,7 @@ export {
   declineGuildInvite,
   searchGuilds,
   guildRoster,
+  playerGuild,
   guildBoard,
   myGuildRank,
   guildChat,

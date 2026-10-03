@@ -293,7 +293,7 @@ check('the owner\'s mature card is hidden for this viewer, the other keeps the o
   hidden.slots === 2 && hidden.racy === 'none' && hidden.plain && hidden.fx === 'moltengold', JSON.stringify(hidden));
 check('the PC panels are drawn from the owner\'s colours too', await desk.evaluate(() => {
   const glass = (sel) => getComputedStyle(document.querySelector(sel)).getPropertyValue('--pcx-glass').replace(/\s+/g, '');
-  return glass('#screen-friend .hero-card') !== glass('#screen-profile .hero-card') && /#240a40/.test(glass('#screen-friend .hero-card'));
+  return glass('#screen-friend .friend-hero') !== glass('#screen-profile .hero-card') && /#240a40/.test(glass('#screen-friend .friend-hero'));
 }));
 
 const real = errors.filter((e) => !/Target page, context or browser has been closed/.test(e));

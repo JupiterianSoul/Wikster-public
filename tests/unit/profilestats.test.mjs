@@ -98,7 +98,7 @@ const broken = { ...profile, daily: { ...profile.daily, lastDay: Math.floor(NOW 
 check('a broken streak shows zero but keeps the best', computeStats({ profile: broken, entries: [], albums: [], facts: {}, now: NOW }).activity.streak === 0
   && computeStats({ profile: broken, entries: [], albums: [], facts: {}, now: NOW }).activity.bestStreak === 12);
 
-const { toSummary, fromSummary, cleanSummary, SUMMARY_NUMBERS, SUMMARY_LISTS } = await import('../../src/profilestats.js');
+const { toSummary, fromSummary, fromColumns, cleanSummary, SUMMARY_NUMBERS, SUMMARY_LISTS } = await import('../../src/profilestats.js');
 const { readFileSync } = await import('node:fs');
 const summary = toSummary(s, { now: NOW });
 const sent = JSON.stringify(summary);
@@ -109,7 +109,8 @@ const back = fromSummary(summary, { cards: 8, unique_cards: 5, collection_value:
 check('a viewer reads the same collection', back.collection.unique === 5 && back.collection.value === 999 && back.collection.byPrint.legendary === 2 && back.collection.best.rarityId === 'legendary' && back.collection.families.find((f) => f.id === 'theme').knownOwned === 2);
 check('the same boosters', back.boosters.opened === 12 && back.boosters.cards === 43 && back.boosters.legendaryPlus === 3 && back.boosters.today === 1 && Math.round(back.boosters.average) === 267
   && back.boosters.luck.value === 700 && back.boosters.top.rarityId === 'mythic' && back.boosters.pity.left === 10 && JSON.stringify(back.boosters.kinds) === JSON.stringify(b.kinds), JSON.stringify(back.boosters));
-check('the same economy, activity, games and social', back.economy.spent === 4200 && back.economy.sellEarned === 650 && back.activity.streak === 9 && back.activity.bestRank === 37
+check('no wallet or spending number is published', Object.keys(summary).every((k) => !k.startsWith('e')) && back.economy === null, JSON.stringify(summary));
+check('the same activity, games and social', back.activity.streak === 9 && back.activity.bestRank === 37
   && back.activity.achDone === 9 && back.games.quizPlayed === 4 && back.social.messages === 11 && back.social.showcaseMax === 5);
 check('the week charts line up', JSON.stringify(back.collection.newPerWeek) === JSON.stringify(c.newPerWeek) && JSON.stringify(back.boosters.perWeek) === JSON.stringify(b.perWeek));
 const later = fromSummary(summary, {}, NOW + 14 * DAY_MS);
@@ -119,6 +120,18 @@ check('a hidden summary shows nothing', fromSummary(toSummary(s, { now: NOW, hid
 const junk = cleanSummary({ cC: -5, cU: 'x', cV: 1e40, cB: 99, zz: 1, cPr: [1, 2, 'a'], cNw: new Array(40).fill(1), bK: [0, 3], title: 'Alpha' });
 check('junk is cleaned: no negatives, no strings, caps held, unknown keys dropped', junk.cC === 0 && !('cU' in junk) && junk.cV === 1e13 && junk.cB === 7 && !('zz' in junk) && !('cPr' in junk) && !('cNw' in junk) && JSON.stringify(junk.bK) === '[0,3]' && !('title' in junk), JSON.stringify(junk));
 check('a summary without its row falls back to its own numbers', fromSummary(summary, {}, NOW).collection.copies === 8);
+
+const row = { cards: 12, unique_cards: 5, collection_value: 3400, boosters_opened: 9, best_rarity: 'epic', play_ms: 7200000, created_at: '2026-01-15T12:00:00Z', level: 14 };
+const bare = fromColumns(row, { ach: 7, achTotal: 355, showcase: 2, showcaseMax: 10, guild: { name: 'Owls', tag: 'OWL' } });
+check('a player with no summary gets a partial board from the public columns', bare.partial && bare.collection.copies === 12 && bare.collection.unique === 5 && bare.collection.value === 3400
+  && bare.boosters.opened === 9 && bare.boosters.top.rarityId === 'epic' && bare.activity.playMs === 7200000 && bare.activity.level === 14 && bare.activity.achDone === 7 && bare.activity.achTotal === 355, JSON.stringify(bare));
+check('with no economy or minigame section, and nothing it cannot know', bare.economy === null && bare.games === null && bare.boosters.cards === null && bare.collection.byPrint === null && bare.collection.albums === null);
+check('the guild and showcase still show', bare.social.guild.tag === 'OWL' && bare.social.showcase === 2 && bare.social.showcaseMax === 10);
+const seen = [card('legendary', 900, 'a', { count: 2, prints: { common: 1, legendary: 1 }, packId: 'theme|animals' }), card('rare', 40, 'b', { packId: 'theme|space' })];
+const withCards = fromColumns({ ...row, cards: null }, { entries: seen, albums: buildAlbums(seen, []) });
+check('a friend\'s cards fill in prints, albums and the best card', withCards.collection.copies === 3 && withCards.collection.byPrint.legendary === 1 && withCards.collection.byPrint.common === 1
+  && withCards.collection.albums.started === 2 && withCards.collection.best.key === 'a', JSON.stringify(withCards.collection));
+check('an empty row is safe', fromColumns({}).collection.copies === null && fromColumns(null).activity.createdAt === null);
 
 const sql = readFileSync(new URL('../../supabase/schema.sql', import.meta.url), 'utf8');
 const body = sql.slice(sql.indexOf('create or replace function public.stats_clean'));

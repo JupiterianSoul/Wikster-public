@@ -31,6 +31,7 @@ import { recall, remember } from './memo.js';
 import { chatBubble } from './bubble.js';
 import { paintInbox } from './inbox.js';
 import { markThumb } from './mature.js';
+import { markPlayer } from './playertag.js';
 
 const WINDOWS = ['daily', 'weekly', 'season', 'alltime'];
 
@@ -259,6 +260,7 @@ async function loadRoster(g) {
     mark.textContent = String(m.username).slice(0, 1).toUpperCase();
     row.querySelector('b').textContent = m.userId === userId() ? `${m.username} (${t('guildYou')})` : m.username;
     row.querySelector('.guild-line').textContent = t('guildRosterLine', { n: m.level, points: formatAmount(m.score) });
+    if (m.userId !== userId()) markPlayer(row, { id: m.userId, name: m.username, level: m.level });
     if (m.userId === g.owner) {
       const tag = document.createElement('span');
       tag.className = 'chip';

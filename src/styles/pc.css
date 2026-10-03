@@ -2037,7 +2037,7 @@ html[data-lowpower='1'] .booster.is-pc-detail, html[data-lowpower='1'] .booster.
 .is-pc #app .row { border-radius: var(--pcx-r-lg); }
 .is-pc #screen-friends .people { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
 .is-pc #screen-friends .find { border-radius: var(--pcx-r-lg); }
-.is-pc #screen-chat, .is-pc #screen-friend { max-width: 72rem !important; }
+.is-pc #screen-chat { max-width: 72rem !important; }
 .is-pc #screen-discussions { max-width: 72rem !important; }
 .is-pc #screen-discussions .talks { grid-template-columns: repeat(auto-fill, minmax(min(28rem, 100%), 1fr)); gap: 0.8rem; padding: 0; }
 .is-pc #screen-discussions .talk-row { padding: 1rem 1.2rem; gap: 1rem; border-radius: var(--pcx-r-lg); }
@@ -2145,8 +2145,49 @@ html.is-pc { --sw-w: 3.4rem; --sw-h: 2rem; }
 .is-pc #guild-room-chat .guild-chat-log { flex: 1 1 auto; min-height: 8rem; max-height: calc(100vh - 20rem); overflow-y: auto; }
 .is-pc #guild-home .guild-scores { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .is-pc #guild-room-board .section-head { display: none; }
-.is-pc #screen-friend .pc-side > .pc-group.is-lead { order: -1; }
-.is-pc #screen-friend .friend-actions { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.is-pc #app main > #screen-friend.pc-tabbed.is-active { grid-template-rows: auto auto 1fr; max-width: min(96rem, 100%) !important; }
+.is-pc #app #screen-friend > .pc-group.is-lead { grid-column: 1 / -1; grid-row: 1; display: grid; gap: 1rem; min-width: 0; }
+.is-pc #app #screen-friend > .pc-group.is-lead > * { margin: 0; max-width: none; }
+.is-pc #app #screen-friend > .pc-side { grid-row: 2 / span 2; }
+.is-pc #app #screen-friend.pc-tabbed > .pc-group:not(.is-lead) { grid-row: 2 / span 2; }
+.is-pc #screen-friend .friend-top { padding: 0; gap: 0.8rem; }
+.is-pc #screen-friend .friend-top .open-title { font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.is-pc #screen-friend .friend-hero {
+  grid-template-columns: auto minmax(0, 1fr) minmax(17rem, 23rem);
+  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-areas: "ring name actions" "ring level actions" "ring presence actions" "ring meta actions" "ring worn actions";
+  justify-items: start;
+  align-items: center;
+  column-gap: 2rem;
+  row-gap: 0.3rem;
+  padding: 1.5rem 1.8rem;
+  border-radius: var(--pcx-r-lg);
+  text-align: left;
+}
+.is-pc #screen-friend .friend-hero::before { inset: 0 auto 0 0; width: 18rem; height: auto; background: radial-gradient(circle at 4.5rem 50%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 70%); }
+.is-pc #screen-friend #friend-ring { grid-area: ring; margin: 0 0.4rem; }
+.is-pc #screen-friend #friend-ring > svg { width: 6.6rem; height: 6.6rem; }
+.is-pc #screen-friend #friend-ring .ring-label { font-size: 1.5rem; }
+.is-pc #screen-friend .friend-name { grid-area: name; font-size: 1.9rem; }
+.is-pc #screen-friend .friend-level { grid-area: level; }
+.is-pc #screen-friend .friend-presence { grid-area: presence; justify-content: flex-start; }
+.is-pc #screen-friend .friend-meta { grid-area: meta; justify-content: flex-start; margin-top: 0.3rem; }
+.is-pc #screen-friend .friend-worn { grid-area: worn; width: auto; justify-items: start; margin-top: 0.3rem; }
+.is-pc #app #screen-friend .badge-grid.friend-badges { justify-content: flex-start; flex-wrap: nowrap; gap: 0 0.4rem; margin: 0; max-width: none; }
+.is-pc #app #screen-friend .badge-grid.friend-badges > :is(.badge-chip, .friend-all) { flex: 0 0 4.6rem; }
+.is-pc #screen-friend .friend-actions { grid-area: actions; align-self: center; width: 100%; margin: 0; gap: 0.6rem; }
+.is-pc #screen-friend .friend-actions[data-relation='none'], .is-pc #screen-friend .friend-actions[data-relation='outgoing'] { align-content: center; }
+.is-pc #screen-friend .friend-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; }
+.is-pc #app #screen-friend .friend-tile { flex-direction: row; justify-content: flex-start; gap: 0.55rem; min-height: 2.7rem; padding: 0 0.9rem; font-size: 0.82rem; }
+.is-pc #app #screen-friend .friend-tile .friend-act-label { text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.is-pc #app #screen-friend .friend-pair .btn { padding: 0 0.8rem; }
+.is-pc #screen-friend .friend-ask { text-align: center; }
+.is-pc #app #screen-friend .showcase-grid.friend-gallery { display: flex; flex-wrap: wrap; justify-content: center; gap: 1.6rem; }
+.is-pc #app #screen-friend .friend-gallery > .showcase-slot { flex: 0 0 11rem; }
+.is-pc #screen-friend .friend-empty, .is-pc #screen-friend .friend-note { padding: 1rem 0 0; }
+.is-pc #screen-friend .friend-best { padding: 0 0 1.4rem; }
+.is-pc #screen-friend .friend-best-row { grid-auto-columns: 9.5rem; gap: 1rem; }
+.is-pc #screen-friend .stat-board { padding: 0; }
 .pck-card .prints-badge { left: auto; right: 0.45rem; top: 0.45rem; bottom: auto; z-index: 6; }
 
 .pccl {

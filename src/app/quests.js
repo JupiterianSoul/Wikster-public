@@ -21,6 +21,7 @@ import { showGate, signedIn, userId } from './gate.js';
 import { on } from '../ui/bus.js';
 import { gainBooster, spawnBurst } from './open.js';
 import { claimAll, claimAllBar } from './claimall.js';
+import { markPlayer } from './playertag.js';
 
 
 function noteQuestClaimed(row) {
@@ -241,11 +242,12 @@ export function boardRow(r, { isMe, nameOf, subOf = null, cls = '' }) {
   row.querySelector('.lb-rank').textContent = `#${r.rank}`;
   const face = row.querySelector('.lb-row-face');
   if (r.userId) { face.dataset.face = r.userId; face.textContent = String(nameOf(r)).slice(0, 1).toUpperCase(); }
-  else face.remove();
+  else { face.remove(); row.classList.add('no-face'); }
   const name = row.querySelector('.lb-name');
   name.textContent = nameOf(r);
   if (subOf) { const sub = document.createElement('small'); sub.className = 'lb-sub'; sub.textContent = subOf(r); name.appendChild(sub); }
   row.querySelector('.lb-score').textContent = formatAmount(r.score);
+  if (r.userId && !isMe(r)) markPlayer(row, { id: r.userId, name: nameOf(r) });
   return row;
 }
 
@@ -263,6 +265,7 @@ export function boardNode(rows, { isMe, nameOf, faceOf, subOf = null, empty, gui
     if (r?.userId) node.querySelector('.lb-face').dataset.face = r.userId;
     node.querySelector('.lb-step-name').textContent = r ? nameOf(r) : t('lbOpenStep');
     node.querySelector('.lb-step-score').textContent = r ? formatAmount(r.score) : '';
+    if (r?.userId && !guild && !isMe(r)) markPlayer(node, { id: r.userId, name: nameOf(r) });
     return node;
   };
   const list = document.createElement('div');
