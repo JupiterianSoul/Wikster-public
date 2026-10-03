@@ -12,15 +12,23 @@ import { TODAY_POOL, todayRarityForRank } from '../economy.js';
 
 export const POOL_MAX = 320;
 export const POOL_LOW = 120;
+export const WIKI_POOL_MAX = 600;
+export const BIG_POOL_MAX = 1200;
+export const POOL_SHARE = 0.15;
+export const GROW_SHARE = 0.75;
+export const ROTATE_SHARE = 0.5;
+export const FULL_SHARE = 0.9;
 export const POOL_STALE_S = 6 * 3600;
 export const REFILL_COUNT = 160;
 export const ROTATE_COUNT = 60;
+export const REFILL_MAX = 240;
 export const REFILL_LANES = 4;
 export const REFILL_BUDGET_MS = 25000;
 export const REFILLS_AT_ONCE = 2;
 export const SAMPLE_SLACK = 1.2;
 export const CUSTOM_SAMPLE_SLACK = 2;
 export const SAMPLE_MAX = 400;
+export const SERVED_KEEP = 500;
 export const EXTRACT_MAX = 600;
 export const DESCRIPTION_MAX = 160;
 export const REPICTURE_MAX = 20;
@@ -28,6 +36,15 @@ export const CUSTOM_POOL_VERSION = 2;
 
 let store = null;
 const refilling = new Set();
+const served = new Map();
+
+export const poolSize = (articles) => {
+  const n = Number(articles);
+  if (!Number.isFinite(n) || n <= 0) return POOL_MAX;
+  return Math.max(POOL_MAX, Math.min(BIG_POOL_MAX, Math.round(n * POOL_SHARE / 40) * 40));
+};
+
+const grows = (max) => Math.max(POOL_LOW, Math.round(max * GROW_SHARE));
 
 export function useArticlePool(next) {
   store = next && typeof next.draw === 'function' && typeof next.fill === 'function' ? next : null;
@@ -80,8 +97,8 @@ function wikipediaPlan(pack) {
     kind: 'wiki',
     api: ACTION(),
     look: { ...(pack.look ?? {}), subject: pack.name },
-    max: POOL_MAX,
-    low: POOL_LOW,
+    max: WIKI_POOL_MAX,
+    low: grows(WIKI_POOL_MAX),
     stale: POOL_STALE_S,
     fill: (count) => gatherWikipedia(pack, count, { budget: REFILL_BUDGET_MS, lanes: REFILL_LANES }),
     deal: (cards, n, random) => dealSets(pack, cards, n, { random })
@@ -98,8 +115,8 @@ async function customPlan(pack) {
     hint: wiki.topic ?? pack.name,
     mature: Boolean(wiki.mature),
     look: lookOf(pack, wiki),
-    max: POOL_MAX,
-    low: POOL_LOW,
+    max: poolSize(wiki.articles ?? pack.wiki?.articles),
+    low: grows(poolSize(wiki.articles ?? pack.wiki?.articles)),
     stale: POOL_STALE_S,
     keep: (card) => wiki.mature || !(card.mature || maturePage(card)),
     fill: (count) => gatherCustomFor(pack, count, { budget: REFILL_BUDGET_MS, width: REFILL_LANES }),
@@ -188,7 +205,7 @@ async function refill(plan, extra = [], size = 0, plates = []) {
   refilling.add(plan.id);
   const started = Date.now();
   try {
-    const count = size >= plan.low ? ROTATE_COUNT : Math.min(REFILL_COUNT, Math.max(ROTATE_COUNT, plan.max - size));
+    const count = size >= plan.low ? Math.max(ROTATE_COUNT, Math.round(plan.max * 0.2)) : Math.min(REFILL_MAX, Math.max(ROTATE_COUNT, plan.max - size));
     const mended = fetching ? await repicture(plan, plates).catch(() => []) : [];
     const got = fetching ? [...mended, ...await plan.fill(count).catch(() => [])] : [];
     const stamped = plan.kind === 'wiki' || plan.kind === 'custom';
@@ -202,7 +219,8 @@ async function refill(plan, extra = [], size = 0, plates = []) {
       rows.push(row);
     }
     if (!rows.length) { await store.fail?.(plan.id); return; }
-    await store.fill(plan.id, plan.kind, rows.slice(0, SAMPLE_MAX), plan.max);
+    await store.fill(plan.id, plan.kind, rows.slice(0, REFILL_MAX + extra.length), plan.max);
+    served.delete(plan.id);
     console.info(`Wikster pool ${plan.id}: ${rows.length} articles in ${Date.now() - started} ms`);
   } catch (error) {
     console.warn('pool refill', plan.id, error?.message ?? error);
@@ -218,41 +236,68 @@ function background(work) {
   return run;
 }
 
-export async function drawFromPool(pack, n, { safe = false, random = Math.random, live = null } = {}) {
+function servedNow(plan, size, handed) {
+  const held = served.get(plan.id) ?? { n: 0, size: 0 };
+  const next = { n: held.n + handed, size: size || held.size };
+  served.delete(plan.id);
+  served.set(plan.id, next);
+  if (served.size > SERVED_KEEP) served.delete(served.keys().next().value);
+  return next.size > 0 && next.n > next.size * ROTATE_SHARE;
+}
+
+function pictureFirst(cards, plan, need) {
+  const platesOk = plan.kind === 'wiki' || plan.kind === 'custom';
+  if (!platesOk) return cards;
+  const pictured = cards.filter((card) => !isPlate(card));
+  return (pictured.length >= need ? pictured : cards).map((card) => withPlate(card, plan.look));
+}
+
+export async function drawFromPool(pack, n, { safe = false, random = Math.random, live = null, user = null } = {}) {
   if (!store) return null;
   const plan = await poolPlan(pack).catch(() => null);
   if (!plan) return null;
   const sets = Math.max(1, Math.floor(Number(n) || 1));
   const per = Math.max(1, Number(plan.kind === 'titles' ? pack.pick : pack.cards) || 5);
   const ask = Math.min(SAMPLE_MAX, Math.ceil(per * sets * (plan.kind === 'custom' ? CUSTOM_SAMPLE_SLACK : SAMPLE_SLACK)) + 5);
+  const rotate = servedNow(plan, 0, 0);
   let got = null;
   try {
-    got = await store.draw(plan.id, ask, { low: plan.low, stale: plan.stale, kind: plan.kind });
+    got = await store.draw(plan.id, ask, { low: plan.low, stale: plan.stale, kind: plan.kind, user, rotate });
   } catch (error) {
     console.warn('pool read', plan.id, error?.message ?? error);
     return null;
   }
-  const all = usableFromPool(got?.cards, plan, { safe });
-  const platesOk = plan.kind === 'wiki' || plan.kind === 'custom';
-  const plates = platesOk ? all.filter(isPlate) : [];
-  const pictured = all.filter((card) => !isPlate(card));
-  const usable = platesOk ? (pictured.length >= per * sets ? pictured : all).map((card) => withPlate(card, plan.look)) : all;
-  const dealt = usable.length ? plan.deal(usable, sets, random) : [];
-  const full = dealt.filter((set) => set.length >= Math.min(per, usable.length));
-  const missing = sets - full.length;
-  if (!missing) {
-    if (got?.due) background(refill(plan, [], Number(got?.size) || 0, plates));
-    return full;
+  const size = Number(got?.size) || 0;
+  const raw = Array.isArray(got?.cards) ? got.cards : [];
+  const freshCount = Number.isFinite(Number(got?.fresh)) ? Math.max(0, Math.min(raw.length, Number(got.fresh))) : raw.length;
+  const fresh = usableFromPool(raw.slice(0, freshCount), plan, { safe });
+  const stale = usableFromPool(raw.slice(freshCount), plan, { safe });
+  const plates = (plan.kind === 'wiki' || plan.kind === 'custom') ? [...fresh, ...stale].filter(isPlate) : [];
+  const need = per * sets;
+  const dealFrom = (cards, count, floor = Math.min(per, cards.length)) => {
+    if (!cards.length || count <= 0) return [];
+    const dealt = plan.deal(pictureFirst(cards, plan, per * count), count, random);
+    return dealt.filter((set) => set.length >= floor);
+  };
+  const freshSets = Math.min(sets, Math.floor(fresh.length / per)) || (fresh.length && !stale.length ? 1 : 0);
+  const full = dealFrom(fresh, freshSets);
+  let missing = sets - full.length;
+  const due = Boolean(got?.due) || servedNow(plan, size, full.length * per);
+  const used = () => new Set(full.flat().map((card) => card.key));
+  const spare = () => { const taken = used(); return [...fresh, ...stale].filter((card) => !taken.has(card.key)); };
+  const deep = size >= plan.max * FULL_SHARE;
+  const goLive = missing > 0 && typeof live === 'function' && (deep || spare().length < missing * per);
+  let extra = [];
+  if (goLive) {
+    const taken = used();
+    extra = (await live(missing).catch(() => [])).filter((set) => Array.isArray(set) && set.length)
+      .map((set) => set.filter((card) => !taken.has(card.key))).filter((set) => set.length);
+    full.push(...extra);
+    missing = sets - full.length;
   }
-  if (typeof live !== 'function') {
-    if (got?.due) background(refill(plan, [], Number(got?.size) || 0, plates));
-    return full;
-  }
-  const used = new Set(full.flat().map((card) => card.key));
-  const extra = (await live(missing).catch(() => [])).filter((set) => Array.isArray(set) && set.length)
-    .map((set) => set.filter((card) => !used.has(card.key))).filter((set) => set.length);
-  if (got?.due) background(refill(plan, extra.flat(), Number(got?.size) || 0, plates));
-  return [...full, ...extra];
+  if (due || extra.length) background(refill(plan, extra.flat(), size, plates));
+  if (missing > 0 && !(deep && typeof live !== 'function')) full.push(...dealFrom(spare(), missing, full.length ? per : 1));
+  return full;
 }
 
-export const poolInternals = { refilling, hash, wikipediaPlan };
+export const poolInternals = { refilling, hash, wikipediaPlan, served };

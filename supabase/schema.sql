@@ -3241,22 +3241,41 @@ create table if not exists public.wiki_pool (
 alter table public.wiki_pool enable row level security;
 create index if not exists wiki_pools_used_idx on public.wiki_pools (used_at);
 
-create or replace function public.wiki_pool_draw(p_pool text, p_n integer, p_low integer default 120, p_stale integer default 21600, p_kind text default 'wiki')
+drop function if exists public.wiki_pool_draw(text, integer, integer, integer, text);
+create or replace function public.wiki_pool_draw(p_pool text, p_n integer, p_low integer default 120, p_stale integer default 21600, p_kind text default 'wiki',
+  p_user uuid default null, p_rotate boolean default false)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   m     wiki_pools;
   cards jsonb;
+  fresh integer := 0;
   due   boolean := false;
 begin
   if p_pool is null or char_length(p_pool) not between 3 and 300 then raise exception 'BAD_POOL'; end if;
-  select coalesce(jsonb_agg(x.card), '[]'::jsonb) into cards
-    from (select w.card from wiki_pool w where w.pool = p_pool order by random() limit greatest(0, least(coalesce(p_n, 0), 400))) x;
+  with held as (
+    select c.article_key as k from cards c
+      where p_user is not null and c.user_id = p_user
+        and c.article_key in (select w.key from wiki_pool w where w.pool = p_pool)
+    union
+    select e->'article'->>'key' from pulls p
+      cross join lateral jsonb_array_elements(case when jsonb_typeof(p.cards) = 'array' then p.cards else '[]'::jsonb end) e
+      where p_user is not null and p.user_id = p_user and p.claimed_at is null
+  ), picked as (
+    select w.card, (h.k is not null) as stale
+      from wiki_pool w left join held h on h.k = w.key
+      where w.pool = p_pool
+      order by (h.k is not null), random()
+      limit greatest(0, least(coalesce(p_n, 0), 400))
+  )
+  select coalesce(jsonb_agg(x.card order by x.stale), '[]'::jsonb), count(*) filter (where not x.stale)
+    into cards, fresh from picked x;
   select * into m from wiki_pools where pool = p_pool;
   if not found then
     insert into wiki_pools (pool, kind, refill_after) values (p_pool, coalesce(p_kind, 'wiki'), now() + interval '3 minutes')
       on conflict (pool) do nothing;
     due := found;
-  elsif (m.size < coalesce(p_low, 0) or (coalesce(p_stale, 0) > 0 and (m.fetched_at is null or m.fetched_at < now() - make_interval(secs => p_stale))))
+  elsif (coalesce(p_rotate, false) or m.size < coalesce(p_low, 0)
+         or (coalesce(p_stale, 0) > 0 and (m.fetched_at is null or m.fetched_at < now() - make_interval(secs => p_stale))))
         and (m.refill_after is null or m.refill_after < now()) then
     update wiki_pools set refill_after = now() + interval '3 minutes', used_at = now()
       where pool = p_pool and (refill_after is null or refill_after < now());
@@ -3264,10 +3283,10 @@ begin
   elsif m.used_at < now() - interval '1 hour' then
     update wiki_pools set used_at = now() where pool = p_pool;
   end if;
-  return jsonb_build_object('cards', cards, 'size', coalesce(m.size, 0), 'due', due);
+  return jsonb_build_object('cards', cards, 'fresh', fresh, 'size', coalesce(m.size, 0), 'due', due);
 end $$;
-revoke all on function public.wiki_pool_draw(text, integer, integer, integer, text) from public, anon, authenticated;
-grant execute on function public.wiki_pool_draw(text, integer, integer, integer, text) to service_role;
+revoke all on function public.wiki_pool_draw(text, integer, integer, integer, text, uuid, boolean) from public, anon, authenticated;
+grant execute on function public.wiki_pool_draw(text, integer, integer, integer, text, uuid, boolean) to service_role;
 
 create or replace function public.wiki_pool_fill(p_pool text, p_kind text, p_cards jsonb, p_max integer default 300, p_total integer default 20000)
 returns integer language plpgsql security definer set search_path = public as $$
@@ -3282,11 +3301,11 @@ begin
     select p_pool, c->>'key', c
       from jsonb_array_elements(case when jsonb_typeof(p_cards) = 'array' then p_cards else '[]'::jsonb end) c
       where coalesce(c->>'key', '') <> '' and char_length(c->>'key') <= 300 and octet_length(c::text) <= 4000
-      limit 400
+      limit 600
     on conflict (pool, key) do update set card = excluded.card, at = now();
   delete from wiki_pool w
     where w.pool = p_pool
-      and w.key in (select key from wiki_pool where pool = p_pool order by at desc, random() offset greatest(1, least(coalesce(p_max, 300), 400)));
+      and w.key in (select key from wiki_pool where pool = p_pool order by at desc, random() offset greatest(1, least(coalesce(p_max, 300), 1500)));
   select count(*) into n from wiki_pool where pool = p_pool;
   update wiki_pools
     set refill_after = now() + case when n - size < 16 then interval '6 hours' else interval '10 minutes' end,

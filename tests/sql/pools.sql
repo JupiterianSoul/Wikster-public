@@ -35,5 +35,23 @@ select t_fails($$select wiki_pool_fill('x', 'wiki', '[]', 10)$$, 'BAD_POOL');
 select t_is('a card too big for a pool row is turned away', wiki_pool_fill('wp:en:fat', 'wiki', jsonb_build_array(jsonb_build_object('key', 'en:Fat', 'title', 'Fat', 'extract', repeat('x', 5000)))) = 0);
 select t_is('players cannot read the pools', not has_table_privilege('authenticated', 'public.wiki_pool', 'select') or not exists (
   select 1 from pg_policies where tablename in ('wiki_pool', 'wiki_pools')));
-select t_is('players cannot call the pool functions', not has_function_privilege('authenticated', 'public.wiki_pool_draw(text, integer, integer, integer, text)', 'execute')
+select t_is('players cannot call the pool functions', not has_function_privilege('authenticated', 'public.wiki_pool_draw(text, integer, integer, integer, text, uuid, boolean)', 'execute')
   and not has_function_privilege('authenticated', 'public.wiki_pool_fill(text, text, jsonb, integer, integer)', 'execute'));
+
+insert into auth.users (id) values ('b0060000-0000-0000-0000-000000000001') on conflict do nothing;
+select wiki_pool_fill('wp:en:mine', 'wiki', (select jsonb_agg(jsonb_build_object('key', 'en:M' || i, 'title', 'M' || i, 'extract', 'text')) from generate_series(1, 40) i), 1200);
+insert into cards (user_id, article_key, title, rarity_id, price)
+  select 'b0060000-0000-0000-0000-000000000001', 'en:M' || i, 'M' || i, 'common', 10 from generate_series(1, 20) i;
+insert into pulls (user_id, spec_id, spec, cards) values ('b0060000-0000-0000-0000-000000000001', 'theme|t|std|5', '{"kind":"theme","cards":5}',
+  (select jsonb_agg(jsonb_build_object('article', jsonb_build_object('key', 'en:M' || i), 'rarityId', 'common')) from generate_series(21, 30) i));
+select t_is('a player is dealt the articles they do not hold first', (select (r->>'fresh')::int = 10
+  and (select bool_and((c->>'key') in (select 'en:M' || i from generate_series(31, 40) i)) from jsonb_array_elements(r->'cards') c)
+  from (select wiki_pool_draw('wp:en:mine', 10, 1, 0, 'wiki', 'b0060000-0000-0000-0000-000000000001') r) x));
+select t_is('cards waiting in their draws count as held', (select (r->>'fresh')::int = 10 and jsonb_array_length(r->'cards') = 25
+  and (select bool_and((c->>'key') in (select 'en:M' || i from generate_series(31, 40) i)) from (select c from jsonb_array_elements(r->'cards') with ordinality as t(c, n) where n <= 10) y)
+  from (select wiki_pool_draw('wp:en:mine', 25, 1, 0, 'wiki', 'b0060000-0000-0000-0000-000000000001') r) x));
+select t_is('another player sees the whole pool as new', (select (wiki_pool_draw('wp:en:mine', 40, 1, 0, 'wiki', 'b0060000-0000-0000-0000-000000000002')->>'fresh')::int = 40));
+select t_is('a pool can grow past its first size for a big source', (select wiki_pool_fill('wp:en:mine', 'wiki',
+  (select jsonb_agg(jsonb_build_object('key', 'en:N' || i, 'title', 'N' || i, 'extract', 'text')) from generate_series(1, 600) i), 1200) = 640));
+update wiki_pools set refill_after = null, fetched_at = now() where pool = 'wp:en:mine';
+select t_is('a busy pool asks to rotate when the reader says so', (wiki_pool_draw('wp:en:mine', 5, 1, 0, 'wiki', null, true)->>'due')::boolean);

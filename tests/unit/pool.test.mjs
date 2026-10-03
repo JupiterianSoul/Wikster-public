@@ -28,17 +28,22 @@ const article = (i, extra = {}) => ({
 });
 
 const rows = new Map();
+const owned = new Map();
+const heldBy = (user) => owned.get(user) ?? new Set();
 const meta = new Map();
 let draws = 0;
 let fills = 0;
 const dbRandom = seeded(7);
 const store = {
-  async draw(id, n) {
+  async draw(id, n, opts = {}) {
     draws++;
     const list = [...(rows.get(id) ?? new Map()).values()];
     for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(dbRandom() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
     const m = meta.get(id);
-    return { cards: list.slice(0, n), size: list.length, due: !m };
+    const held = opts.user ? heldBy(opts.user) : new Set();
+    const fresh = list.filter((c) => !held.has(c.key));
+    const ordered = [...fresh, ...list.filter((c) => held.has(c.key))].slice(0, n);
+    return { cards: ordered, fresh: Math.min(fresh.length, ordered.length), size: list.length, due: !m };
   },
   async fill(id, kind, cards, max) {
     fills++;
@@ -157,5 +162,48 @@ globalThis.fetch = async (url) => {
 const mended = await repicture(mendPlan, [...rows.get(plateId).values()].filter((c) => c.picture?.source === 'text'));
 globalThis.fetch = realFetch;
 check('a refill finds the pictures its text cards were missing', mended.length === 1 && mended[0].title === 'Pooled 4200' && mended[0].thumbnail === 'https://upload.wikimedia.org/p/640px-4200.jpg' && !mended[0].picture);
+
+const { drawFromPool, poolInternals, WIKI_POOL_MAX, poolSize } = await import('../../src/wiki/pool.js');
+const bigPack = { ...pack, queries: ['bigsource'] };
+const bigId = (await poolPlan(bigPack)).id;
+await store.fill(bigId, 'wiki', Array.from({ length: WIKI_POOL_MAX }, (_, i) => compactCard(article(10000 + i))), WIKI_POOL_MAX);
+const dupesOver = async (user, boosters, rnd) => {
+  const keys = [];
+  for (let i = 0; i < boosters; i++) {
+    const [set] = await drawArticlesMany(bigPack, 1, { random: rnd, user, poolOnly: true });
+    for (const c of set ?? []) {
+      keys.push(c.key);
+      if (user) { if (!owned.has(user)) owned.set(user, new Set()); owned.get(user).add(c.key); }
+    }
+  }
+  return keys.length - new Set(keys).size;
+};
+let withoutPlayer = 0;
+let withPlayer = 0;
+for (let run = 0; run < 50; run++) {
+  withoutPlayer += await dupesOver(null, 20, seeded(500 + run));
+  withPlayer += await dupesOver(`player-${run}`, 20, seeded(900 + run));
+}
+check('twenty boosters in a row never repeat a card for a player', withPlayer === 0, `${withPlayer} repeats in 50 players, ${(withoutPlayer / 50).toFixed(2)} per 20 boosters without the player rule`);
+const deepUser = 'deep-player';
+let firstRepeatAt = null;
+const seenKeys = new Set();
+for (let i = 0; i < 200 && firstRepeatAt == null; i++) {
+  const [set] = await drawArticlesMany(bigPack, 1, { random: seeded(7000 + i), user: deepUser, poolOnly: true });
+  for (const c of set ?? []) {
+    if (seenKeys.has(c.key) && firstRepeatAt == null) firstRepeatAt = seenKeys.size;
+    seenKeys.add(c.key);
+    if (!owned.has(deepUser)) owned.set(deepUser, new Set());
+    owned.get(deepUser).add(c.key);
+  }
+}
+check('a player sees the whole pool before any repeat', firstRepeatAt == null || firstRepeatAt >= WIKI_POOL_MAX * 0.95, `first repeat after ${firstRepeatAt ?? 'none'} of ${WIKI_POOL_MAX}`);
+let liveAsked = 0;
+const live = async (m) => { liveAsked += m; return Array.from({ length: m }, (_, k) => Array.from({ length: 5 }, (_, i) => article(50000 + liveAsked * 10 + k * 5 + i))); };
+const exhausted = await drawFromPool(bigPack, 3, { random: seeded(3), user: deepUser, live });
+check('once a big pool is used up for a player, the rest is drawn live', liveAsked === 3 && exhausted.length === 3 && exhausted.flat().every((c) => Number(c.pageId) >= 50000), `${liveAsked} live boosters`);
+check('pools grow with the size of their source', poolSize(300) === 320 && poolSize(7000) === 1040 && poolSize(500000) === 1200);
+for (let i = 0; i < 700; i++) await drawFromPool({ ...pack, queries: [`many${i}`] }, 1, { random: seeded(i) });
+check('the per pool counters stay bounded', poolInternals.served.size <= 500, String(poolInternals.served.size));
 
 done();
