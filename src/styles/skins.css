@@ -1,0 +1,208 @@
+.card[data-fx]:not([data-fx='classic']) {
+  --sk-1: var(--rarity);
+  --sk-2: color-mix(in srgb, var(--rarity) 50%, #fff);
+  --sk-line: color-mix(in srgb, var(--rarity) 45%, transparent);
+  --sk-glow: color-mix(in srgb, var(--rarity) 60%, transparent);
+}
+.card[data-fx]:not([data-fx='classic']) .card-front::before,
+.card[data-fx]:not([data-fx='classic']) .card-front::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.card[data-fx]:not([data-fx='classic']) .card-front::before {
+  inset: 1.5cqw;
+  z-index: 8;
+  border-radius: calc(var(--card-radius) - 1.5cqw);
+  border: .32cqw solid var(--sk-line);
+}
+.card[data-fx]:not([data-fx='classic']) .card-front::after {
+  inset: 0;
+  z-index: 9;
+  background:
+    radial-gradient(120% 60% at 18% -6%, rgba(255, 255, 255, .16), transparent 58%),
+    radial-gradient(140% 70% at 50% 118%, rgba(0, 0, 0, .16), transparent 62%);
+}
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='uncommon'] .card-front::after {
+  inset: -10% -120%;
+  background: linear-gradient(104deg, transparent 42%, color-mix(in srgb, var(--sk-2) 22%, transparent) 48%, rgba(255, 255, 255, .2) 50%, color-mix(in srgb, var(--sk-2) 18%, transparent) 52%, transparent 58%);
+  transform: translateX(-38%);
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='uncommon'] .card-front::after { animation: sk-sweep 9s cubic-bezier(.5, 0, .3, 1) 1.5s infinite; }
+@keyframes sk-sweep { 0%, 62% { transform: translateX(-38%); } 100% { transform: translateX(38%); } }
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='rare'] .card-front::before,
+.card[data-fx]:not([data-fx='classic'])[data-rarity='epic'] .card-front::before,
+.card[data-fx]:not([data-fx='classic'])[data-rarity='legendary'] .card-front::before,
+.card[data-fx]:not([data-fx='classic'])[data-rarity='mythic'] .card-front::before,
+.card[data-fx]:not([data-fx='classic'])[data-rarity='prismatic'] .card-front::before {
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  padding: var(--sk-rim-w, 1cqw);
+  background: var(--sk-rim);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='rare'] {
+  --sk-rim: linear-gradient(135deg, var(--sk-2), var(--sk-1) 22%, color-mix(in srgb, var(--sk-1) 40%, #000) 45%, #fff 52%, var(--sk-1) 60%, color-mix(in srgb, var(--sk-1) 40%, #000) 82%, var(--sk-2));
+  --sk-rim-w: .9cqw;
+}
+.card[data-fx]:not([data-fx='classic'])[data-rarity='rare'] .card-front::after {
+  inset: -10% -120%;
+  background: linear-gradient(108deg, transparent 43%, color-mix(in srgb, var(--sk-2) 30%, transparent) 48.5%, rgba(255, 255, 255, .42) 50%, color-mix(in srgb, var(--sk-2) 26%, transparent) 51.5%, transparent 56%);
+  transform: translateX(-38%);
+  translate: calc(var(--lx) * 6%) 0;
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='rare'] .card-front::after { animation: sk-sweep 6.5s cubic-bezier(.5, 0, .3, 1) 1s infinite; }
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='epic'] {
+  --sk-rim: conic-gradient(from 210deg, var(--sk-1), var(--sk-2), #fff, var(--sk-1), color-mix(in srgb, var(--sk-1) 35%, #000), var(--sk-2), var(--sk-1));
+  --sk-rim-w: 1.05cqw;
+}
+.card[data-fx]:not([data-fx='classic'])[data-rarity='epic'] .card-front::after {
+  inset: -40%;
+  background:
+    linear-gradient(118deg, transparent 34%, color-mix(in srgb, var(--sk-1) 26%, transparent) 42%, rgba(255, 255, 255, .26) 48%, color-mix(in srgb, var(--sk-2) 30%, transparent) 53%, color-mix(in srgb, #5eead4 18%, transparent) 58%, transparent 66%);
+  translate: calc(var(--lx) * 16%) calc(var(--ly) * 10%);
+  transform: translateX(-10%);
+  opacity: .72;
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='epic'] .card-front::after { animation: sk-drift 7s ease-in-out infinite alternate; }
+@keyframes sk-drift { from { transform: translateX(-12%); } to { transform: translateX(12%); } }
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='legendary'] {
+  --sk-rim: linear-gradient(135deg, #fff6d6, #e6b54a 18%, #7a4d10 34%, #ffe9a8 50%, #b47b1c 66%, #fff2c4 82%, #8a5a12);
+  --sk-rim-w: 1.15cqw;
+}
+.card[data-fx]:not([data-fx='classic'])[data-rarity='legendary'] .card-front::after {
+  inset: -40%;
+  background:
+    radial-gradient(circle at 30% 32%, #fff 0 .35cqw, rgba(255, 240, 200, .8) .6cqw, transparent 1.8cqw),
+    radial-gradient(circle at 66% 44%, #fff 0 .25cqw, rgba(255, 240, 200, .7) .5cqw, transparent 1.4cqw),
+    radial-gradient(circle at 44% 70%, #fff 0 .3cqw, rgba(255, 240, 200, .7) .55cqw, transparent 1.6cqw),
+    radial-gradient(circle at 72% 64%, #fff 0 .2cqw, transparent 1.1cqw),
+    linear-gradient(120deg, transparent 36%, rgba(255, 236, 180, .18) 44%, rgba(255, 255, 255, .5) 49%, rgba(255, 226, 150, .22) 54%, transparent 62%);
+  translate: calc(var(--lx) * 18%) calc(var(--ly) * 12%);
+  -webkit-mask: linear-gradient(180deg, #000 0 49%, rgba(0, 0, 0, .4) 54% 82%, #000 92%);
+  mask: linear-gradient(180deg, #000 0 49%, rgba(0, 0, 0, .4) 54% 82%, #000 92%);
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='legendary'] .card-front::after { animation: sk-glint 4.2s ease-in-out infinite; }
+@keyframes sk-glint { 0%, 100% { opacity: .55; } 40% { opacity: 1; } 55% { opacity: .7; } }
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='mythic'] {
+  --sk-rim: linear-gradient(0deg, #ffe08a, #ff6a2b 25%, #b3122e 55%, #ff7b39 80%, #ffd36b);
+  --sk-rim-w: 1cqw;
+}
+.card[data-fx]:not([data-fx='classic'])[data-rarity='mythic'] .card-front::before { box-shadow: none; }
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='mythic'] .card-front::before { animation: sk-heat 2.6s ease-in-out infinite; }
+@keyframes sk-heat { 0%, 100% { opacity: .75; } 35% { opacity: 1; } 50% { opacity: .82; } 70% { opacity: 1; } }
+.card[data-fx]:not([data-fx='classic'])[data-rarity='mythic'] .card-front::after {
+  inset: -60% 0 -60%;
+  background: linear-gradient(0deg, transparent 30%, color-mix(in srgb, var(--sk-1) 0%, transparent) 38%, color-mix(in srgb, var(--sk-2) 24%, transparent) 47%, rgba(255, 220, 160, .28) 50%, color-mix(in srgb, var(--sk-2) 22%, transparent) 53%, transparent 62%);
+  transform: translateY(40%);
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='mythic'] .card-front::after { animation: sk-rise 5s cubic-bezier(.4, 0, .4, 1) .8s infinite; }
+@keyframes sk-rise { 0%, 30% { transform: translateY(40%); } 100% { transform: translateY(-40%); } }
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='exotic'] .card-front::before {
+  inset: 1.2cqw;
+  border: 0;
+  border-radius: 0;
+  background:
+    linear-gradient(var(--sk-2), var(--sk-2)) 0 0 / 7cqw .45cqw, linear-gradient(var(--sk-2), var(--sk-2)) 0 0 / .45cqw 7cqw,
+    linear-gradient(var(--sk-2), var(--sk-2)) 100% 0 / 7cqw .45cqw, linear-gradient(var(--sk-2), var(--sk-2)) 100% 0 / .45cqw 7cqw,
+    linear-gradient(var(--sk-2), var(--sk-2)) 0 100% / 7cqw .45cqw, linear-gradient(var(--sk-2), var(--sk-2)) 0 100% / .45cqw 7cqw,
+    linear-gradient(var(--sk-2), var(--sk-2)) 100% 100% / 7cqw .45cqw, linear-gradient(var(--sk-2), var(--sk-2)) 100% 100% / .45cqw 7cqw;
+  background-repeat: no-repeat;
+  opacity: .9;
+}
+.card[data-fx]:not([data-fx='classic'])[data-rarity='exotic'] .card-front::after {
+  inset: -30% 0;
+  background: linear-gradient(180deg, transparent 46%, color-mix(in srgb, var(--sk-2) 26%, transparent) 49.4%, color-mix(in srgb, var(--sk-2) 85%, #fff) 50%, color-mix(in srgb, var(--sk-2) 10%, transparent) 50.6%, transparent 53%);
+  transform: translateY(-45%);
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='exotic'] .card-front::after { animation: sk-scan 4.6s cubic-bezier(.45, 0, .55, 1) 1s infinite; }
+@keyframes sk-scan { 0%, 40% { transform: translateY(-45%); opacity: 0; } 44% { opacity: .9; } 96% { opacity: .9; } 100% { transform: translateY(45%); opacity: 0; } }
+
+.card[data-fx]:not([data-fx='classic'])[data-rarity='prismatic'] {
+  --sk-rim: conic-gradient(from var(--a, 0deg), #ff5f6d, #ffc371, #f9f871, #6ee7b7, #60a5fa, #a78bfa, #f472b6, #ff5f6d);
+  --sk-rim-w: 1.2cqw;
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='prismatic'] .card-front::before { animation: bx-turn-a 8s linear infinite; }
+.card[data-fx]:not([data-fx='classic'])[data-rarity='prismatic'] .card-front::after {
+  inset: 0;
+  background:
+    radial-gradient(circle at 24% 18%, #fff 0 .3cqw, transparent 1.3cqw),
+    radial-gradient(circle at 78% 30%, #fff 0 .25cqw, transparent 1.1cqw),
+    radial-gradient(circle at 62% 8%, #fff 0 .2cqw, transparent 1cqw),
+    radial-gradient(circle at 14% 42%, #fff 0 .22cqw, transparent 1cqw),
+    repeating-linear-gradient(115deg, transparent 0 4%, rgba(255, 95, 109, .2) 6%, rgba(255, 195, 113, .2) 8%, rgba(249, 248, 113, .16) 10%, rgba(110, 231, 183, .2) 12%, rgba(96, 165, 250, .22) 14%, rgba(167, 139, 250, .2) 16%, transparent 18% 22%);
+  background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 240% 240%;
+  background-position: 0 0, 0 0, 0 0, 0 0, calc(50% + var(--lx) * 40%) calc(50% + var(--ly) * 40%);
+  -webkit-mask: linear-gradient(180deg, #000 0 47%, rgba(0, 0, 0, .28) 55% 86%, rgba(0, 0, 0, .7) 100%);
+  mask: linear-gradient(180deg, #000 0 47%, rgba(0, 0, 0, .28) 55% 86%, rgba(0, 0, 0, .7) 100%);
+}
+.card.is-lit[data-fx]:not([data-fx='classic'])[data-rarity='prismatic'] .card-front::after { animation: sk-glint 3.6s ease-in-out infinite; }
+
+.card[data-fx]:not([data-fx='classic']) .card-body::before {
+  content: '';
+  position: absolute;
+  inset: 0 1cqw;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 2cqw;
+  background: var(--sk-scrim, none);
+  -webkit-mask: linear-gradient(180deg, transparent, #000 14% 62%, transparent);
+  mask: linear-gradient(180deg, transparent, #000 14% 62%, transparent);
+}
+.card:is([data-fx='supernova'], [data-fx='diffraction'], [data-fx='spectralrain'], [data-fx='auroraveil'], [data-fx='refraction'], [data-fx='predator'], [data-fx='meltdown'], [data-fx='corrupted'], [data-fx='emberstorm'], [data-fx='furnacegate'], [data-fx='gridrunner'], [data-fx='datastream'], [data-fx='terminal'], [data-fx='oscilloscope'], [data-fx='schematic'], [data-fx='moss'], [data-fx='chlorophyll'], [data-fx='hammered'], [data-fx='filigree'], [data-fx='coronation'], [data-fx='moltengold'], [data-fx='geode'], [data-fx='sapphirecut'], [data-fx='violetstorm'], [data-fx='eventhorizon']) {
+  --sk-scrim: radial-gradient(120% 90% at 50% 42%, rgba(5, 4, 10, .6), rgba(5, 4, 10, .35) 60%, rgba(5, 4, 10, 0) 100%);
+}
+.card[data-fx='supernova'] .fx-a {
+  -webkit-mask: repeating-conic-gradient(from 0deg at 50% 44%, #000 0 .8deg, transparent .8deg 6deg), linear-gradient(180deg, #000 0 50%, rgba(0, 0, 0, .18) 58% 100%);
+  -webkit-mask-composite: source-in;
+  mask: repeating-conic-gradient(from 0deg at 50% 44%, #000 0 .8deg, transparent .8deg 6deg), linear-gradient(180deg, #000 0 50%, rgba(0, 0, 0, .18) 58% 100%);
+  mask-composite: intersect;
+}
+.card[data-fx='supernova'] .fx-c {
+  -webkit-mask: linear-gradient(180deg, #000 0 50%, rgba(0, 0, 0, .2) 58% 100%);
+  mask: linear-gradient(180deg, #000 0 50%, rgba(0, 0, 0, .2) 58% 100%);
+}
+.card[data-fx='diffraction'] .fx-a { -webkit-mask: linear-gradient(180deg, #000 0 50%, rgba(0, 0, 0, .3) 58% 100%); mask: linear-gradient(180deg, #000 0 50%, rgba(0, 0, 0, .3) 58% 100%); }
+
+.card:is([data-fx='newsprint'], [data-fx='graphpaper'], [data-fx='carboncopy'], [data-fx='photocopy'], [data-fx='indexcard']) {
+  --sk-line: rgba(30, 26, 20, .2);
+}
+.card:is([data-fx='newsprint'], [data-fx='graphpaper'], [data-fx='carboncopy'], [data-fx='photocopy'], [data-fx='indexcard']) .card-front::after {
+  background:
+    radial-gradient(120% 60% at 18% -6%, rgba(255, 255, 255, .28), transparent 58%),
+    radial-gradient(150% 80% at 50% 120%, rgba(60, 40, 10, .14), transparent 64%),
+    linear-gradient(90deg, rgba(0, 0, 0, .05), transparent 6% 94%, rgba(0, 0, 0, .06));
+}
+.card[data-fx='newsprint'] .card-desc { color: #8a2a1a; }
+.card[data-fx='graphpaper'] .card-desc { color: #2c5c84; }
+.card[data-fx='carboncopy'] .card-desc { color: #5b3f80; }
+.card[data-fx='photocopy'] .card-desc { color: #262626; }
+.card[data-fx='indexcard'] .card-desc { color: #a8382d; }
+.card[data-fx='graphpaper'] :is(.fx-a, .fx-b) { opacity: .62; }
+.card[data-fx='neonsign'] .fx-b { margin: 2.2cqw; }
+.card[data-fx='cobaltsilk'] .card-desc { color: #a9cbff; }
+.card[data-fx='moss'] .fx-a {
+  filter: none;
+  background:
+    radial-gradient(42% 20% at 0% 100%, #4aa457, #2a6c35 42%, rgba(20, 60, 28, .6) 62%, transparent 76%),
+    radial-gradient(34% 17% at 100% 96%, #53b562, #2b6c35 48%, transparent 74%),
+    radial-gradient(18% 13% at 0% 62%, #3d8f49, #22562b 55%, transparent 78%),
+    radial-gradient(16% 12% at 100% 58%, #3d8f49, #22562b 55%, transparent 78%),
+    radial-gradient(30% 13% at 96% 0%, #46a052, #245c2d 50%, transparent 76%),
+    radial-gradient(22% 11% at 6% 2%, #46a052, #245c2d 50%, transparent 76%);
+  opacity: .9;
+}
+
+html[data-lowpower='1'] .card[data-fx] .card-front::before,
+html[data-lowpower='1'] .card[data-fx] .card-front::after { animation: none !important; }
