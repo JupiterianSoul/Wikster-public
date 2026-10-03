@@ -1,0 +1,99 @@
+name: Tests
+on:
+  push:
+    branches: ['ci/**']
+  workflow_dispatch:
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run check
+        if: matrix.shard == 1
+      - run: node tests/run.mjs
+        env:
+          SHARD: ${{ matrix.shard }}/6
+          TEST_JOBS: '2'
+          PERF_SWITCH_MS: '1500'
+          PERF_PC_SWITCH_MS: '2200'
+      - name: Keep the logs and screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-output-${{ matrix.shard }}
+          path: |
+            tests/out/*.log
+            tests/out/*.png
+          if-no-files-found: ignore
+  browsers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: node tests/run.mjs browsersguest browsers
+        env:
+          ENGINES: chromium,firefox,webkit
+      - name: Keep the logs and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browsers-output
+          path: tests/out/browsers*
+          if-no-files-found: ignore
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node tests/sql/run.mjs
+        env:
+          WIKSTER_PG: postgresql://postgres:postgres@localhost:5432/postgres
+  functions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: node tools/build-economy.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check --no-lock economy/index.ts quiz/index.ts quests/index.ts delete-account/index.ts push/index.ts billing/index.ts steam-auth/index.ts
+        working-directory: supabase/functions
+        env:
+          DENO_NO_PACKAGE_JSON: '1'
