@@ -1,6 +1,7 @@
 import { RARITIES } from './data/rarities.js';
 import { tx } from './i18n.js';
 import { collectionValue } from './econ/rules.js';
+import { levelOf } from './progression.js';
 
 export function measure({ profile, entries, albumsDeep, albumsStarted = 0, albumsHundred = 0, customPacks, friends, wallet = 0,
   wikdle = null, wishlist = 0, badgesWorn = 0, signedIn = false, specials = 0 }) {
@@ -17,7 +18,7 @@ export function measure({ profile, entries, albumsDeep, albumsStarted = 0, album
     cards: Object.values(rc).reduce((sum, n) => sum + n, 0),
     unique: entries.length,
     value: collectionValue(entries),
-    level: profile.progress?.level ?? 1,
+    level: levelOf(profile.progress),
     albumsDeep,
     albumsStarted,
     legendaries: high,

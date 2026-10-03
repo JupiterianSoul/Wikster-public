@@ -6,7 +6,7 @@ import { Segmented, press } from '../ui/components.js';
 import { synth } from '../ui/sound.js';
 import * as store from '../collection.js';
 import { RARITIES } from '../data/rarities.js';
-import { rankFor } from '../progression.js';
+import { levelOf, rankFor } from '../progression.js';
 import { canClaim } from '../daily.js';
 import { RETIRED_CODES } from '../codedefs.js';
 import { MIN_AGE, ageConfirmed, ageMeta, deviceLocked, lockDevice } from '../age.js';
@@ -25,6 +25,7 @@ import { live } from './live.js';
 import { dropReady, warmDrawer } from './open.js';
 import { renderPacks } from './packs.js';
 import { achievementsUnlocked, allBadgeStates, refreshLevelBadge, updateBadges, wornBadges } from './regalia.js';
+import { summaryLanded, summaryToSend } from './statsboard.js';
 import { applySettings, renderAccountRow } from './settings.js';
 import { applyMatureLock } from './mature.js';
 import { payStipend, renderShop } from './shop.js';
@@ -337,8 +338,8 @@ export function currentStats() {
   const counts = state.profile.rarityCounts ?? {};
   const best = RARITIES.filter((r) => (counts[r.id] ?? 0) > 0).pop();
   return {
-    level: state.profile.progress.level ?? 1,
-    rank: rankFor(state.profile.progress.level ?? 1).name.en,
+    level: levelOf(state.profile.progress),
+    rank: rankFor(levelOf(state.profile.progress)).name.en,
     cards: entries.reduce((sum, e) => sum + e.count, 0),
     uniqueCards: entries.length,
     boostersOpened: state.profile.boostersOpened ?? 0,
@@ -440,10 +441,14 @@ async function flushKeys() {
     badges: full.badges,
     ...(Array.isArray(state.profile.showcase) ? { showcase: state.profile.showcase.slice(0, SHOWCASE_MAX) } : {})
   };
+  let pending = null;
+  try { pending = summaryToSend({ leaving: typeof document !== 'undefined' && document.visibilityState === 'hidden' }); } catch {}
+  if (pending) stats.summary = pending.summary;
   const said = `${userId()}:${JSON.stringify(stats)}`;
   const done = await account.syncMe(userId(), { stats: said !== keyStatsSent ? stats : null });
   if (!done) return false;
   if (done.status === 'outdated') { state.account.outdated = true; showUpdateBar('outdated'); return true; }
+  if (done.status !== 'frozen') summaryLanded(pending);
   if (done.status === 'frozen') return true;
   if (done.status !== 'same') keyStatsSent = said;
   if (done.status === 'merged') takeMerge();

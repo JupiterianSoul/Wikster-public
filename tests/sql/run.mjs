@@ -21,7 +21,7 @@ writeFileSync(samples, FILTER_SAMPLES.map(([text, scope]) => {
   const want = screenText(text, scope);
   return `select t_is(${quote(`the database agrees with the game on ${scope}: ${text}`)}, text_flag(${quote(text)}, ${quote(scope)}) is not distinct from ${quote(want)});`;
 }).join('\n'));
-const steps = ['tests/sql/prelude.sql', schema, schema, 'tests/sql/econ.sql', 'tests/sql/p2p.sql', samples, 'tests/sql/safety.sql', 'tests/sql/leftovers.sql', 'tests/sql/push.sql', 'tests/sql/save.sql', 'tests/sql/live.sql', 'tests/sql/speed.sql', 'tests/sql/control.sql', 'tests/sql/liveops.sql', 'tests/sql/polish.sql', 'tests/sql/boosters.sql', 'tests/sql/claims.sql', 'tests/sql/social.sql', 'tests/sql/market.sql', 'tests/sql/danger.sql', 'tests/sql/custom.sql', 'tests/sql/appearance.sql', 'tests/sql/friends.sql', 'tests/sql/codes.sql', 'tests/sql/calls.sql', schema, 'tests/sql/friends2.sql'];
+const steps = ['tests/sql/prelude.sql', schema, schema, 'tests/sql/econ.sql', 'tests/sql/p2p.sql', samples, 'tests/sql/safety.sql', 'tests/sql/leftovers.sql', 'tests/sql/push.sql', 'tests/sql/save.sql', 'tests/sql/live.sql', 'tests/sql/speed.sql', 'tests/sql/control.sql', 'tests/sql/liveops.sql', 'tests/sql/polish.sql', 'tests/sql/boosters.sql', 'tests/sql/claims.sql', 'tests/sql/social.sql', 'tests/sql/market.sql', 'tests/sql/danger.sql', 'tests/sql/custom.sql', 'tests/sql/appearance.sql', 'tests/sql/stats.sql', 'tests/sql/friends.sql', 'tests/sql/codes.sql', 'tests/sql/calls.sql', 'tests/sql/pools.sql', schema, 'tests/sql/friends2.sql'];
 for (const file of steps) {
   const r = psql(['-f', file]);
   const lines = r.stderr.split('\n').filter((l) => /PASS|FAIL|ERROR/.test(l)).map((l) => l.replace(/^.*(NOTICE|ERROR):\s*/, ''));

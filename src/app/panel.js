@@ -12,7 +12,7 @@ import { canClaim, msUntilNextUtcDay } from '../daily.js';
 import { formatCountdown } from '../shop.js';
 import { formatAmount } from '../pricing.js';
 import { nextFreeAt, nextRefreshAt } from '../economy.js';
-import { levelFraction, rankFor, xpForLevel } from '../progression.js';
+import { atMaxLevel, levelFraction, levelOf, rankFor, xpToNext } from '../progression.js';
 import { fill, h } from '../ui/dom.js';
 import { activeFilterCount, openFilters } from './binder.js';
 import { WIDE, el, money, showScreen, state } from './core.js';
@@ -74,7 +74,8 @@ const block = (title, rows) => h('section.panel-block', [h('h3.panel-title', tit
 
 function todayBlock() {
   const progress = state.profile.progress ?? { level: 1, xp: 0 };
-  const level = progress.level ?? 1;
+  const level = levelOf(progress);
+  const atMax = atMaxLevel(progress);
   const claimable = quests.claimableCount(questUserKey());
   const board = quests.loadBoard(questUserKey());
   const done = board.quests.filter((q) => q.progress >= q.target).length;
@@ -84,11 +85,12 @@ function todayBlock() {
   return block(t('panelToday'), [
     h('div.panel-level', [
       h('div.panel-level-head', [
-        h('b', t('panelLevel', { n: level })),
+        h('b', atMax ? t('profileMax') : t('panelLevel', { n: level })),
         h('span.panel-rank', tx(rankFor(level).name))
       ]),
-      h('span.panel-xp', h('i', { style: { width: `${Math.round(levelFraction(progress) * 100)}%` } })),
-      h('span.panel-xp-note.tabular', t('panelXp', { have: (progress.xp ?? 0).toLocaleString(), need: xpForLevel(level).toLocaleString() }))
+      h(`span.panel-xp${atMax ? '.is-max' : ''}`, h('i', { style: { width: `${Math.round(levelFraction(progress) * 100)}%` } })),
+      h('span.panel-xp-note.tabular', atMax ? t('levelMaxNote', { n: level })
+        : t('panelXp', { have: (Number(progress.xp) || 0).toLocaleString(), need: xpToNext(progress).toLocaleString() }))
     ]),
     line('gift', gift ? t('panelGiftReady') : clockText('gift'),
       gift ? action(t('dailyClaim'), () => openDaily()) : null, gift ? null : 'gift'),

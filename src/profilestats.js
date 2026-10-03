@@ -3,7 +3,8 @@ import { PITY_RANK, bestPrint, collectionValue, pityLeft, pityLimit, printsOf } 
 import { albumCompleteEdition, albumEditionClaimed } from './albums.js';
 import { streakAlive } from './daily.js';
 import { seasonAt } from './season.js';
-import { DAY_MS, utcDay, utcWeekIndex } from './days.js';
+import { DAY_MS, utcDay, utcDayIndex, utcWeekIndex } from './days.js';
+import { SEASONS } from './data/seasons.js';
 
 export const SPARK_WEEKS = 12;
 
@@ -244,3 +245,156 @@ export function computeStats(input) {
 export const dayOf = (day) => Date.parse(`${day}T12:00:00Z`);
 
 export const weekStartOf = (now, back) => (((utcWeekIndex(now) - back) * 7) - 4) * DAY_MS;
+
+export const SUMMARY_VERSION = 1;
+const BIG = 1e13;
+const FAMILY_IDS = ['theme', 'code', 'custom', 'wild'];
+const KIND_IDS = BOOSTER_KINDS.map(([id]) => id);
+const rarityIndex = (id) => Math.max(0, RARITIES.findIndex((r) => r.id === normalizeRarityId(id)));
+
+export const SUMMARY_NUMBERS = {
+  at: BIG, off: 1,
+  cC: BIG, cU: BIG, cV: BIG, cF: BIG, cS: BIG, cX: BIG, cP: 1000, cB: RARITIES.length - 1, cBa: BIG, cAs: BIG, cAc: BIG, cAe: BIG, cAm: BIG,
+  bN: BIG, bC: BIG, bH: BIG, bPd: BIG, bPl: BIG, bS: BIG, bT: BIG, bW: BIG, bA: BIG, bLd: BIG, bLv: BIG, bLn: BIG, bR: RARITIES.length - 1, bRa: BIG,
+  eC: BIG, eI: BIG, eSp: BIG, eSb: BIG, eSo: BIG, eSe: BIG, eFu: BIG, eLs: BIG, eLb: BIG, eLw: BIG, eBi: BIG, eTr: BIG, eGs: BIG, eGr: BIG, eIe: BIG, eIs: BIG, eAt: BIG,
+  aD: BIG, aSt: BIG, aSb: BIG, aG: BIG, aQ: BIG, aQh: BIG, aA: BIG, aAt: BIG, aSp: BIG, aSi: SEASONS.length - 1, aSx: BIG, aSn: BIG, aR: BIG, aBr: BIG,
+  gWp: BIG, gWw: BIG, gWs: BIG, gWb: BIG, gQp: BIG, gQw: BIG, gQf: BIG, gDb: BIG, gDr: BIG, gRr: BIG, gRf: BIG, gVp: BIG, gVw: BIG, gP: BIG,
+  sF: BIG, sGd: BIG, sGg: BIG, sGm: BIG, sMs: BIG, sCv: BIG, sK: BIG, sSh: 100, sSm: 100
+};
+
+export const SUMMARY_LISTS = { cPr: RARITIES.length, cNw: SPARK_WEEKS, bPw: SPARK_WEEKS, bK: BOOSTER_KINDS.length * 2, cFm: FAMILY_IDS.length * 6 };
+
+export const SUMMARY_MAX_BYTES = 3000;
+
+export function cleanSummary(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = { v: SUMMARY_VERSION };
+  for (const [key, max] of Object.entries(SUMMARY_NUMBERS)) {
+    const v = raw[key];
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+    out[key] = Math.min(max, Math.max(0, Math.round(v)));
+  }
+  for (const [key, len] of Object.entries(SUMMARY_LISTS)) {
+    const v = raw[key];
+    if (!Array.isArray(v) || !v.length || v.length > len || !v.every((x) => typeof x === 'number' && Number.isFinite(x))) continue;
+    out[key] = v.map((x) => Math.min(BIG, Math.max(0, Math.round(x))));
+  }
+  if (out.off) return { v: SUMMARY_VERSION, off: 1, ...(out.at != null ? { at: out.at } : {}) };
+  return out;
+}
+
+const put = (out, key, v) => { if (v != null && Number.isFinite(Number(v))) out[key] = Math.round(Number(v)); };
+const KEEP_ZERO = new Set(['v', 'at', 'bN', 'cC', 'cU']);
+
+export function toSummary(stats, { now = Date.now(), hidden = false } = {}) {
+  const at = utcDayIndex(now);
+  if (hidden) return { v: SUMMARY_VERSION, off: 1, at };
+  const o = { v: SUMMARY_VERSION, at };
+  const { collection: c, boosters: b, economy: e, activity: a, games: g, social: so } = stats;
+  put(o, 'cC', c.copies); put(o, 'cU', c.unique); put(o, 'cV', c.value); put(o, 'cF', c.favorites); put(o, 'cS', c.specials); put(o, 'cX', c.customs);
+  if (c.completion != null) put(o, 'cP', c.completion * 1000);
+  if (c.best) { put(o, 'cB', rarityIndex(c.best.rarityId)); put(o, 'cBa', c.best.at); }
+  put(o, 'cAs', c.albums.started); put(o, 'cAc', c.albums.complete); put(o, 'cAe', c.albums.editions); put(o, 'cAm', c.albums.medals);
+  if (c.copies > 0) o.cPr = RARITIES.map((r) => whole(c.byPrint[r.id]));
+  if (c.newPerWeek.some((x) => x > 0)) o.cNw = c.newPerWeek.map(whole);
+  if (c.families.length) o.cFm = c.families.flatMap((f) => [FAMILY_IDS.indexOf(f.id), f.albums, f.started, f.owned, f.knownOwned, f.total].map(whole));
+  put(o, 'bN', b.opened); put(o, 'bC', b.cards); put(o, 'bH', b.legendaryPlus); put(o, 'bPd', b.pity.dry); put(o, 'bPl', b.pity.limit);
+  put(o, 'bS', b.since); put(o, 'bT', b.today); put(o, 'bW', b.week); put(o, 'bA', b.average);
+  if (b.luck) { put(o, 'bLd', Math.floor(dayOf(b.luck.day) / DAY_MS)); put(o, 'bLv', b.luck.value); put(o, 'bLn', b.luck.boosters); }
+  if (b.top) { put(o, 'bR', rarityIndex(b.top.rarityId)); put(o, 'bRa', b.top.at); }
+  if (b.perWeek) o.bPw = b.perWeek.map(whole);
+  if (b.kinds.length) o.bK = b.kinds.flatMap(([id, count]) => [KIND_IDS.indexOf(id), whole(count)]);
+  put(o, 'eC', e.coins); put(o, 'eI', e.ink); put(o, 'eSp', e.spent); put(o, 'eSb', e.shopBuys); put(o, 'eSo', e.sold); put(o, 'eSe', e.sellEarned);
+  put(o, 'eFu', e.fused); put(o, 'eLs', e.auctionsSold); put(o, 'eLb', e.auctionBest); put(o, 'eLw', e.auctionsWon); put(o, 'eBi', e.bidsPlaced);
+  put(o, 'eTr', e.trades); put(o, 'eGs', e.giftsSent); put(o, 'eGr', e.giftsReceived); put(o, 'eIe', e.inkEarned); put(o, 'eIs', e.inkSpent); put(o, 'eAt', e.atelierBuys);
+  put(o, 'aD', a.days); put(o, 'aSt', a.streak); put(o, 'aSb', a.bestStreak); put(o, 'aG', a.gifts); put(o, 'aQ', a.quests); put(o, 'aQh', a.questsHard);
+  put(o, 'aA', a.achDone); put(o, 'aAt', a.achTotal); put(o, 'aSp', a.season.points); put(o, 'aSi', Math.max(0, SEASONS.findIndex((x) => x.id === a.season.id)));
+  put(o, 'aSx', a.seasonBest); put(o, 'aSn', a.seasonsPlayed); put(o, 'aR', a.seasonRungs); put(o, 'aBr', a.bestRank);
+  put(o, 'gWp', g.wikdlePlayed); put(o, 'gWw', g.wikdleWon); put(o, 'gWs', g.wikdleStreak); put(o, 'gWb', g.wikdleBest); put(o, 'gQp', g.quizPlayed);
+  put(o, 'gQw', g.quizWins); put(o, 'gQf', g.quizPerfect); put(o, 'gDb', g.duelBest); put(o, 'gDr', g.duelRounds); put(o, 'gRr', g.revealRounds);
+  put(o, 'gRf', g.revealPerfect); put(o, 'gVp', g.versusPlayed); put(o, 'gVw', g.versusWins); put(o, 'gP', g.arcadePoints);
+  put(o, 'sF', so.friends); put(o, 'sGd', so.guildDonated); put(o, 'sGg', so.guildGoals); put(o, 'sGm', so.guildMatches); put(o, 'sMs', so.messages);
+  put(o, 'sCv', so.conversations); put(o, 'sK', so.kudosGiven); put(o, 'sSh', so.showcase); put(o, 'sSm', so.showcaseMax);
+  for (const k of Object.keys(o)) if (o[k] === 0 && !KEEP_ZERO.has(k) && !(k === 'aSi')) delete o[k];
+  return cleanSummary(o);
+}
+
+function shifted(list, by) {
+  if (!Array.isArray(list)) return null;
+  const late = Math.min(SPARK_WEEKS, Math.max(0, by));
+  const out = [...list.slice(late), ...new Array(late).fill(0)];
+  while (out.length < SPARK_WEEKS) out.unshift(0);
+  return out.slice(-SPARK_WEEKS);
+}
+
+export function fromSummary(raw, row = {}, now = Date.now()) {
+  const s = cleanSummary(raw);
+  if (!s || s.off) return null;
+  const n = (k) => (s[k] != null ? s[k] : 0);
+  const has = (k) => s[k] != null;
+  const at = has('at') ? s.at : utcDayIndex(now);
+  const today = utcDayIndex(now);
+  const weeksLate = utcWeekIndex(now) - utcWeekIndex(at * DAY_MS);
+  const families = [];
+  const fm = s.cFm ?? [];
+  for (let i = 0; i + 5 < fm.length; i += 6) {
+    const [id, albums, started, owned, knownOwned, total] = fm.slice(i, i + 6);
+    if (!FAMILY_IDS[id]) continue;
+    families.push({ id: FAMILY_IDS[id], albums, started, owned, complete: 0, knownOwned, total, pct: total > 0 ? Math.min(1, knownOwned / total) : null });
+  }
+  const kinds = [];
+  const bk = s.bK ?? [];
+  for (let i = 0; i + 1 < bk.length; i += 2) if (KIND_IDS[bk[i]] && bk[i + 1] > 0) kinds.push([KIND_IDS[bk[i]], bk[i + 1]]);
+  const season = SEASONS[n('aSi')] ?? SEASONS[0];
+  const col = (v, fallback) => (v != null && Number.isFinite(Number(v)) ? Math.max(0, Number(v)) : fallback);
+  const limit = Math.max(1, n('bPl') || 40);
+  return {
+    collection: {
+      copies: col(row.cards, n('cC')),
+      unique: col(row.unique_cards, n('cU')),
+      value: col(row.collection_value, n('cV')),
+      favorites: n('cF'), specials: n('cS'), customs: n('cX'),
+      byPrint: Object.fromEntries(RARITIES.map((r, i) => [r.id, s.cPr?.[i] ?? 0])),
+      best: has('cB') ? { rarityId: RARITIES[s.cB].id, key: null, title: '', price: 0, at: s.cBa ?? null } : null,
+      albums: { started: n('cAs'), complete: n('cAc'), editions: n('cAe'), medals: n('cAm') },
+      families,
+      completion: has('cP') ? s.cP / 1000 : null,
+      newPerWeek: shifted(s.cNw ?? [], weeksLate)
+    },
+    boosters: {
+      opened: col(row.boosters_opened, n('bN')),
+      cards: n('bC'), legendaryPlus: n('bH'), byRarity: null, kinds,
+      pity: { dry: Math.min(n('bPd'), limit), limit, left: Math.max(1, limit - n('bPd')) },
+      since: has('bS') ? s.bS : null,
+      today: has('bS') ? (at === today ? n('bT') : 0) : null,
+      week: has('bS') ? (weeksLate === 0 ? n('bW') : 0) : null,
+      tracked: 0,
+      average: has('bA') ? s.bA : null,
+      luck: has('bLd') && n('bLv') > 0 ? { day: utcDay(s.bLd * DAY_MS), value: s.bLv, boosters: n('bLn') } : null,
+      top: has('bR') ? { rarityId: RARITIES[s.bR].id, key: null, title: '', price: 0, at: s.bRa ?? null } : null,
+      perWeek: s.bPw ? shifted(s.bPw, weeksLate) : null
+    },
+    economy: {
+      coins: n('eC'), ink: n('eI'), spent: n('eSp'), shopBuys: n('eSb'), crates: 0, bundles: 0, sold: n('eSo'), sellEarned: n('eSe'),
+      fused: n('eFu'), auctionsListed: 0, auctionsSold: n('eLs'), auctionsWon: n('eLw'), auctionBest: n('eLb'), bidsPlaced: n('eBi'),
+      trades: n('eTr'), giftsSent: n('eGs'), giftsReceived: n('eGr'), inkEarned: n('eIe'), inkSpent: n('eIs'), atelierBuys: n('eAt')
+    },
+    activity: {
+      playMs: col(row.play_ms, 0),
+      createdAt: row.created_at ? Date.parse(row.created_at) || null : null,
+      days: n('aD'), streak: at >= today - 1 ? n('aSt') : 0, bestStreak: n('aSb'), gifts: n('aG'), giftWeeks: 0,
+      quests: n('aQ'), questsHard: n('aQh'), questDays: 0, achDone: n('aA'), achTotal: n('aAt'),
+      season: { id: season.id, name: season.name, points: n('aSp') },
+      seasonBest: n('aSx'), seasonsPlayed: n('aSn'), seasonRungs: n('aR'), bestRank: n('aBr') > 0 ? s.aBr : null
+    },
+    games: {
+      wikdlePlayed: n('gWp'), wikdleWon: n('gWw'), wikdleStreak: n('gWs'), wikdleBest: n('gWb'), quizPlayed: n('gQp'), quizWins: n('gQw'),
+      quizPerfect: n('gQf'), duelBest: n('gDb'), duelRounds: n('gDr'), revealRounds: n('gRr'), revealPerfect: n('gRf'),
+      versusPlayed: n('gVp'), versusWins: n('gVw'), arcadePoints: n('gP')
+    },
+    social: {
+      friends: n('sF'), guild: null, guildDonated: n('sGd'), guildGoals: n('sGg'), guildMatches: n('sGm'),
+      messages: n('sMs'), conversations: n('sCv'), kudosGiven: n('sK'), showcase: n('sSh'), showcaseMax: n('sSm') || 10
+    }
+  };
+}

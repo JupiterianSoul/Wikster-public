@@ -100,6 +100,7 @@ shared.profiles.get(idB).badges = {
   ach: 42
 };
 shared.profiles.get(idB).avatar = { url: PX };
+shared.profiles.get(idB).stats = null;
 await viaDrawer(a, 'friends');
 await a.waitForTimeout(1200);
 await a.locator('#friends-list .person').first().click();
@@ -141,6 +142,26 @@ await closeSheets(a);
 await a.locator('#friend-seg .seg-option[data-value="albums"]').click();
 await a.waitForTimeout(600);
 check('back to albums', await a.locator('#friend-albums').isVisible() && await a.locator('#friend-classic').isHidden());
+
+section('their statistics, in public');
+const dayNow = Math.floor(Date.now() / 86400000);
+shared.profiles.get(idB).stats = { v: 1, at: dayNow, cC: 3, cU: 2, cPr: [1, 0, 0, 0, 3, 0, 0, 0], bN: 5, bC: 15, bH: 3, bS: Date.now() - 86400000, bT: 2, bW: 4, bA: 310,
+  bPd: 12, bPl: 40, bK: [0, 5], eC: 500, eSp: 1200, eSb: 3, aD: 6, aSt: 3, aSb: 5, aA: 42, aAt: 355, gWp: 3, gWw: 2, sF: 1, sMs: 4, sSh: 1, sSm: 10 };
+await a.waitForTimeout(30500);
+await viaDrawer(a, 'friends');
+await a.waitForTimeout(1200);
+await a.locator('#friends-list .person').first().click();
+await a.waitForTimeout(2200);
+const pubSecs = await a.locator('#friend-stats .stat-sec').evaluateAll((n) => n.map((x) => x.dataset.sec));
+check('a friend who shares their statistics shows all six sections', JSON.stringify(pubSecs) === JSON.stringify(['collection', 'boosters', 'economy', 'activity', 'games', 'social']), JSON.stringify(pubSecs));
+check('with no private note on any of them', await a.locator('#friend-stats .stat-sec-note').count() === 0);
+const pubTile = (id) => a.locator(`#friend-stats .stat-cell[data-stat="${id}"]`).first().innerText().then((x) => x.replace(/\s+/g, ' ').trim()).catch(() => '');
+check('their economy is there', /^500 Buckarooz/.test(await pubTile('coins')) && /^1,200 Spent in the Shop 3 purchases/.test(await pubTile('spent')), await pubTile('spent'));
+check('their achievements and Wikdle', /^42 \/ 355 Achievements/.test(await pubTile('achievements')) && /^2 of 3 Wikdle won/.test(await pubTile('wikdle')));
+check('their copies by print are drawn', await a.locator('#friend-stats .stat-seg').count() === 2);
+check('today\'s count is theirs', /^2 Opened today/.test(await pubTile('today')));
+await a.screenshot({ path: 'f2f-friend-stats.png', fullPage: true });
+shared.profiles.get(idB).stats = { v: 1, off: 1, at: dayNow };
 
 section('chat');
 await a.locator('#friend-actions .btn-primary').click();

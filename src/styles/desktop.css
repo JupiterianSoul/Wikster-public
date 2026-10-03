@@ -297,6 +297,7 @@
     overflow: hidden;
   }
   .panel-xp i { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+  .panel-xp.is-max i { background: linear-gradient(90deg, var(--accent), var(--accent-2, var(--accent))); }
   .panel-xp-note { font-size: 0.68rem; color: var(--ink-faint); }
 
   .appbar { padding-top: 12px; padding-bottom: 10px; }

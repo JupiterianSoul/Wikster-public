@@ -3,7 +3,9 @@ import { buckSvg, iconSvg, inkSvg } from '../data/icons.js';
 import { getLanguage, t, tx } from '../i18n.js';
 import { h } from '../ui/dom.js';
 import { Bar } from '../ui/components.js';
-import { computeStats, dayOf, SPARK_WEEKS, weekStartOf } from '../profilestats.js';
+import { computeStats, dayOf, fromSummary, SPARK_WEEKS, toSummary, weekStartOf } from '../profilestats.js';
+import { evaluate as evaluateAchievements } from '../achievements.js';
+import { achFacts } from './regalia.js';
 import { buildAlbums } from '../albums.js';
 import { loadStats as loadWikdleStats } from '../wikdle.js';
 import { saveWrites } from '../save.js';
@@ -161,6 +163,44 @@ const rarityTile = (id, label, card, sub) => card ? tile(id, label, tx(rarityByI
 
 export function paintOwnStatsBoard(node, { facts, achDone, achTotal }) {
   const s = ownStats({ facts, achDone, achTotal });
+  paintStatsBoard(node, s, { owner: true });
+  if (!statsShared()) node.prepend(h('p.stat-foot.stat-hidden', t('statHiddenNote')));
+  return s;
+}
+
+export const statsShared = () => state.profile?.settings?.publicStats !== false;
+
+const SUMMARY_GAP = 15 * 60 * 1000;
+let summarySent = { text: '', at: 0, off: null };
+
+export function publicSummary() {
+  if (!statsShared()) return toSummary(null, { hidden: true });
+  const facts = achFacts();
+  const list = evaluateAchievements(facts, state.profile.achievements?.redeemed ?? []);
+  return toSummary(ownStats({ facts, achDone: list.filter((a) => a.unlocked).length, achTotal: list.length }));
+}
+
+export function summaryToSend({ leaving = false } = {}) {
+  const summary = publicSummary();
+  const text = JSON.stringify(summary);
+  if (text === summarySent.text) return null;
+  const flipped = Boolean(summary.off) !== Boolean(summarySent.off);
+  if (!flipped && !leaving && summarySent.at && Date.now() - summarySent.at < SUMMARY_GAP) return null;
+  return { summary, text };
+}
+
+export function summaryLanded(pending) {
+  if (pending) summarySent = { text: pending.text, at: Date.now(), off: Boolean(pending.summary.off) };
+}
+
+export function paintPublicStatsBoard(node, raw, row) {
+  const stats = fromSummary(raw, row);
+  if (!stats) return false;
+  paintStatsBoard(node, stats, { owner: false });
+  return true;
+}
+
+export function paintStatsBoard(node, s, { owner = false } = {}) {
   const now = Date.now();
   const { collection: c, boosters: b, economy: e, activity: a, games: g, social: so } = s;
   const optional = (v, make) => (v > 0 ? make() : null);
@@ -223,7 +263,7 @@ export function paintOwnStatsBoard(node, { facts, achDone, achTotal }) {
       optional(e.inkSpent, () => tile('inkSpent', t('statInkSpent'), inks(e.inkSpent), { html: true })),
       optional(e.atelierBuys, () => tile('atelier', t('statAtelier'), n(e.atelierBuys)))
     ])
-  ], t('statPrivate'));
+  ]);
 
   const activity = section('activity', iconSvg('calendar', { size: 18 }), t('statSecActivity'), [
     tiles([
@@ -252,7 +292,7 @@ export function paintOwnStatsBoard(node, { facts, achDone, achTotal }) {
     gameTiles.length ? tiles(gameTiles) : h('p.stat-foot', t('statNoGames'))
   ]);
 
-  const online = account.configured && signedIn();
+  const online = !owner || (account.configured && signedIn());
   const social = section('social', iconSvg('friends', { size: 18 }), t('statSecSocial'), [
     tiles([
       online ? tile('friends', t('statFriends'), n(so.friends)) : null,
@@ -265,5 +305,5 @@ export function paintOwnStatsBoard(node, { facts, achDone, achTotal }) {
   ]);
 
   node.replaceChildren(...[collection, boosters, economy, activity, games, social].filter(Boolean));
-  return s;
+  return node;
 }

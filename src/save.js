@@ -11,6 +11,7 @@ export const SAVE_KEYS = [
 ];
 
 import { BUILD } from './version.js';
+import { levelOf } from './progression.js';
 
 const FORMAT = 'wikster-save';
 const LEGACY_FORMATS = ['wiklodo-save', 'packywiki-save'];
@@ -109,7 +110,7 @@ export function describeSave(text) {
     cards: entries.reduce((sum, e) => sum + (e.count ?? 1), 0),
     unique: entries.length,
     wallet: read('wikster.wallet.v1', 0),
-    level: profile?.progress?.level ?? 1,
+    level: levelOf(profile?.progress),
     boosters: profile?.boostersOpened ?? 0,
     at: parsed.at ?? null
   };

@@ -169,6 +169,8 @@ h2.is-refreshing::before { top: auto; bottom: -4px; }
 .ring-track { stroke: var(--line); }
 .ring-fill { stroke: var(--accent); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 60%, transparent)); }
 [data-theme='paper'] .ring-fill { filter: none; }
+.ring.is-max .ring-track { stroke: color-mix(in srgb, var(--accent-2, var(--accent)) 55%, var(--line)); }
+.ring.is-max .ring-fill { stroke: var(--accent-2, var(--accent)); }
 .ring-label {
   position: absolute;
   font-size: 0.72rem;

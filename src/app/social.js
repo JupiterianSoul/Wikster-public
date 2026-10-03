@@ -3,7 +3,7 @@ import { withSpecialPhoto } from '../codedefs.js';
 import * as account from '../account.js';
 import { bump, bumpMax, bumpMin, noteIn } from '../ledger.js';
 import { getLanguage, t, tx } from '../i18n.js';
-import { rankFor } from '../progression.js';
+import { MAX_LEVEL, clampLevel, rankFor } from '../progression.js';
 import { Bar, Segmented, press, reveal } from '../ui/components.js';
 import { iconSvg } from '../data/icons.js';
 import { synth } from '../ui/sound.js';
@@ -40,6 +40,7 @@ import { chatBubble } from './bubble.js';
 import { inboxReady, makeBadge, paintInbox, paintSocialTabs } from './inbox.js';
 import { pruneCleared } from './drawer.js';
 import { fxOn, sceneFor, wearLook } from './lookview.js';
+import { paintPublicStatsBoard } from './statsboard.js';
 import { markThumb } from './mature.js';
 
 export function personRow(profile, actions, { onOpen = null, note = null, data = null } = {}) {
@@ -1691,7 +1692,7 @@ export let friendSeg;
 export function paintFriendPresence() {
   const person = state.viewing?.profile;
   if (!person) return;
-  const level = person.level ?? 1;
+  const level = clampLevel(person.level);
   const online = onlineNow(person);
   const since = online ? '' : lastSeenText(person);
   el.friendRank.innerHTML = (online === null ? ''
@@ -1705,16 +1706,17 @@ export function renderFriend() {
   const entry = state.viewing;
   if (!entry) return;
   const person = entry.profile;
-  const level = person.level ?? 1;
+  const level = clampLevel(person.level);
 
   entry.look = wearLook(el.screens.friend, person.appearance);
   sceneFor(entry.look);
   el.friendBack.innerHTML = iconSvg('chevronLeft', { size: 18 });
   el.friendName.textContent = person.username ?? '';
-  live.friendRing.set(0, String(level));
+  live.friendRing.set(level >= MAX_LEVEL ? 1 : 0, String(level));
+  el.friendRing.classList.toggle('is-max', level >= MAX_LEVEL);
   paintFrameInto(el.friendRing, person.avatar?.frame?.style ?? null, person.avatar?.frame?.style ? frameTier(level) : 0);
   paintRingFace(el.friendRing, person);
-  el.friendLevel.textContent = t('profileLevel', { n: level });
+  el.friendLevel.textContent = level >= MAX_LEVEL ? t('profileMax') : t('profileLevel', { n: level });
   paintFriendPresence();
   el.friendStatsLabel.textContent = t('profileStats');
   el.friendRarityLabel.textContent = t('statRarity');
@@ -1956,7 +1958,9 @@ export function paintFriendStats(entry) {
     [t('statBest'), person.best_rarity && best ? tx(best.name) : t('none')]
   ];
   paintStamp(el.friendStatsStamp, entry.otherId);
-  el.friendStats.replaceChildren(...stats.map(([label, value]) => {
+  const board = paintPublicStatsBoard(el.friendStats, person.stats, person);
+  el.friendStats.className = board ? 'stat-board' : 'stat-grid';
+  if (!board) el.friendStats.replaceChildren(...stats.map(([label, value]) => {
     const cell = document.createElement('div');
     cell.className = 'stat-cell';
     cell.innerHTML = '<b></b><span></span>';

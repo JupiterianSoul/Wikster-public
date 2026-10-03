@@ -95,6 +95,7 @@ function apply(row) {
         changed++;
       }
       if (!changed) return null;
+      store.normalizeProfile(state.profile);
       store.saveProfile(state.profile);
       return { text: p.say || t('giftProfile'), icon: 'star' };
     }
@@ -108,6 +109,7 @@ function apply(row) {
       }
       const last = parts.at(-1);
       node[last] = Math.max(0, (Number(node[last]) || 0) + (Number(p.by) || 0));
+      store.normalizeProfile(state.profile);
       store.saveProfile(state.profile);
       return { text: p.say || t('giftProfile'), icon: 'star' };
     }
