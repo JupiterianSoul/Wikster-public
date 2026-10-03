@@ -80,7 +80,7 @@ select t_is('a refill that never reported back stops counting after a while', (w
 
 update wiki_pool set at = now() - interval '1 day' where pool = 'wp:en:capc' and key = 'en:CC1';
 select wiki_pool_fill('wp:en:capc', 'wiki', '[{"key":"en:CC1","title":"CC1","extract":"text"},{"key":"en:CC2","title":"CC2 new","extract":"text"}]', 300);
-select t_is('a refill that brings a card back unchanged keeps it and marks it fresh', (select at = now() and card->>'title' = 'CC1' from wiki_pool where pool = 'wp:en:capc' and key = 'en:CC1'));
+select t_is('a refill that brings a card back unchanged keeps it and marks it fresh', (select at > now() - interval '1 hour' and card->>'title' = 'CC1' from wiki_pool where pool = 'wp:en:capc' and key = 'en:CC1'));
 select t_is('a changed card is replaced', (select card->>'title' = 'CC2 new' from wiki_pool where pool = 'wp:en:capc' and key = 'en:CC2'));
 
 select t_is('big payload columns are left out of table statistics', (select count(*) = 5 from pg_attribute

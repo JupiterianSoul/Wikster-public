@@ -1068,5 +1068,24 @@ export const RELEASES = [
       { en: 'The economy section is only shown to you. Friends visiting your profile now also see how many different cards you have.',
         fr: 'La section économie n\u2019est visible que par vous. Les amis qui visitent votre profil voient aussi combien de cartes différentes vous avez.' }
     ]
+  },
+  {
+    id: 'smoother-1-1-1', icon: 'spark', accent: '#34d399',
+    title: { en: 'Faster and steadier', fr: 'Plus rapide et plus stable' },
+    points: [
+      { en: 'The game opens much faster the first time, especially on slow connections', fr: 'Le jeu s\u2019ouvre bien plus vite la première fois, surtout avec une connexion lente' },
+      { en: 'Gifted Wikipedia Today boosters open again', fr: 'Les boosters Wikipédia du jour offerts s\u2019ouvrent à nouveau' },
+      { en: 'Cards and coins stay right even when the connection is slow', fr: 'Les cartes et les pièces restent justes même quand la connexion est lente' }
+    ],
+    changelog: [
+      { en: 'A Wikipedia Today booster dated a day whose list is not out yet now opens with the latest published list instead of loading forever.',
+        fr: 'Un booster Wikipédia du jour daté d\u2019un jour dont la liste n\u2019est pas encore publiée s\u2019ouvre avec la dernière liste parue au lieu de charger sans fin.' },
+      { en: 'The first launch downloads about a third less, the intro shows almost at once, and screens you have not opened yet load when you open them.',
+        fr: 'Le premier lancement télécharge environ un tiers de moins, l\u2019intro s\u2019affiche presque tout de suite, et les écrans pas encore ouverts se chargent quand vous les ouvrez.' },
+      { en: 'A late reply from the server can no longer take back a card you just pulled, and a slow moment shows one message instead of several.',
+        fr: 'Une réponse tardive du serveur ne peut plus reprendre une carte que vous venez de tirer, et un moment de lenteur n\u2019affiche plus qu\u2019un seul message.' },
+      { en: 'Messages to friends arrive faster.',
+        fr: 'Les messages entre amis arrivent plus vite.' }
+    ]
   }
 ];
