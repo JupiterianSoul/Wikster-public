@@ -2471,8 +2471,7 @@ input[type='search']::-webkit-search-cancel-button { filter: invert(1) opacity(0
   white-space: nowrap;
 }
 .grade-chip.is-small { font-size: 0.55rem; padding: 1px 6px; }
-.frame-shop-note { padding-inline: 0; margin: 0; }
-.frame-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; margin-top: 10px; }
+.frame-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 12px; padding-inline: var(--gutter); }
 .frame-card.frame-tile {
   flex-direction: column;
   align-items: stretch;

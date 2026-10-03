@@ -381,11 +381,11 @@ function drawSingularity(t, s, u) {
     lin(`${u}in`, [[0, '#ffffff'], [0.5, '#bae6fd'], [1, '#7dd3fc', 0.25]], -36, -36, 36, 36),
     lin(`${u}md`, [[0, '#fde68a'], [0.5, '#fbbf24'], [1, '#f97316', 0.25]], 40, -40, -40, 40),
     lin(`${u}ot`, [[0, '#d8b4fe'], [0.5, '#8b5cf6'], [1, '#312e81', 0.2]], -45, 45, 45, -45),
-    lin(`${u}jt`, [[0, '#e0f2fe', 0], [0.5, '#bae6fd'], [1, '#e0f2fe', 0]], 0, -57, 0, -46));
+    lin(`${u}jt`, [[0, '#e0f2fe', 0], [0.5, '#bae6fd'], [1, '#e0f2fe', 0]], 0, -52.5, 0, -45));
   base += glow(u, '#7c3aed', 0.56, 0.78, 0.32, 56, 'wl');
   if (s >= 2) base += fine(arcLine(48.5, 200, 340, '#c4b5fd', 0.8, 'stroke-opacity=".6" stroke-linecap="round"') + arcLine(48.5, 20, 160, '#c4b5fd', 0.8, 'stroke-opacity=".6" stroke-linecap="round"'));
   base += ring(31.7, '#05030c', 3.4) + ring(31.7, '#3b1d6e', 0.5, 'stroke-opacity=".9"');
-  const jet = `<rect x="-1.3" y="-57" width="2.6" height="11" rx="1.3" fill="url(#${u}jt)"/><rect x="-1.3" y="-57" width="2.6" height="11" rx="1.3" fill="url(#${u}jt)" transform="rotate(180)"/>`;
+  const jet = `<rect x="-1.3" y="-52.5" width="2.6" height="7.5" rx="1.3" fill="url(#${u}jt)"/><rect x="-1.3" y="-52.5" width="2.6" height="7.5" rx="1.3" fill="url(#${u}jt)" transform="rotate(180)"/>`;
   const starCount = 8 + s * 2;
   const stars = Array.from({ length: starCount }, (_, i) => {
     const [x, y] = xy(46 + jit(i, 10) * 9, i * 360 / starCount + jit(i, 9) * 14);

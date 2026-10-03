@@ -974,6 +974,89 @@ if (!ONLY || ONLY.includes('frames')) {
     return issues;
   }, { list: FRAME_STYLES.map((s) => ({ id: s.id, svg: frameSvg(s.id, 50) })), seat: FRAME_SEAT });
   record('frames: the level number stays centred and clear inside every frame, at every size', { issues: seat, blank: null, pageScroll: false });
+  const { INK_FRAMES } = await import('../../src/frames.js');
+  for (const [w, h, scale] of [[1280, 720, 1.4], [1440, 900, 1], [1920, 1080, 1]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await setScale(scale);
+    await page.evaluate(() => globalThis.wiksterPc?.screen('atelier'));
+    await page.waitForTimeout(900);
+    await page.locator('#screen-atelier .pc-sections .pc-section-link', { hasText: 'Level frames' }).click();
+    await page.waitForTimeout(700);
+    const seen = new Set();
+    const look = () => page.evaluate(() => [...document.querySelectorAll('#atelier-frames .frame-card')].filter((c) => {
+      const r = c.getBoundingClientRect();
+      return !c.classList.contains('pc-paged-out') && r.height > 0 && r.top >= 0 && r.bottom <= innerHeight + 1;
+    }).map((c) => c.dataset.frame));
+    const issues = [];
+    for (let i = 0; i < 12; i++) {
+      for (const id of await look()) seen.add(id);
+      if (seen.size === INK_FRAMES.length) break;
+      await page.keyboard.press('ArrowRight');
+      await page.waitForTimeout(250);
+    }
+    const missing = INK_FRAMES.filter((f) => !seen.has(f.id)).map((f) => f.id);
+    if (missing.length) issues.push(`paging with the keyboard never shows ${missing.join(', ')}`);
+    await page.keyboard.press('Home');
+    await page.waitForTimeout(250);
+    await page.locator('#atelier-frames').hover({ position: { x: 20, y: 20 } }).catch(() => {});
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(450);
+    const pages = await page.evaluate(() => document.querySelector('#atelier-frames + .pcx-pager .pcx-page-track')?.children.length ?? 0);
+    if (pages > 1 && (await look()).includes(INK_FRAMES[0].id)) issues.push('the wheel does not turn the page');
+    await page.keyboard.press('End');
+    await page.waitForTimeout(300);
+    const last = await page.evaluate(() => [...document.querySelectorAll('#atelier-frames .frame-card')].at(-1)?.dataset.frame);
+    if (!(await look()).includes(last)) issues.push('End does not reach the last frame');
+    record(`frames: every Atelier frame can be reached on PC ${w}x${h} @${scale}`, { issues, blank: null, pageScroll: false });
+  }
+  for (const [w, h, scale] of [[1280, 720, 1.4], [1440, 900, 1], [1920, 1080, 1]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await setScale(scale);
+    const issues = [];
+    let barHeight = null;
+    for (const frame of ['metal', 'phoenix', 'solar', 'singularity', 'god']) {
+      await page.evaluate((f) => localStorage.setItem('wikster.frameStyle.v1', f), frame);
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2200);
+      for (let i = 0; i < 6; i++) {
+        if (!(await page.locator('#sheet').isVisible().catch(() => false))) break;
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(350);
+      }
+      const got = await page.evaluate((frame) => {
+        const still = document.createElement('style');
+        still.textContent = '.frame-overlay .fr-layer { animation: none !important; }';
+        document.head.appendChild(still);
+        const out = [];
+        const bar = document.querySelector('.pc-bar')?.getBoundingClientRect();
+        const ring = document.querySelector('.pc-plate-ring');
+        const overlay = ring?.querySelector(':scope > .frame-overlay');
+        const badge = document.querySelector('.pc-plate-level');
+        if (!bar || !ring || !badge) return { out: ['the header plate is missing'], bar: 0 };
+        if (!overlay || getComputedStyle(overlay).display === 'none' || !overlay.querySelector(`svg.fr-${frame}`)) out.push(`${frame}: the frame is not drawn on the header plate`);
+        const r = ring.getBoundingClientRect();
+        let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
+        for (const n of overlay?.querySelectorAll('svg *') ?? []) {
+          if (['defs', 'linearGradient', 'radialGradient', 'stop', 'g'].includes(n.tagName) || n.closest('defs')) continue;
+          if (getComputedStyle(n).display === 'none' || n.closest('.fr-fine') && getComputedStyle(n.closest('.fr-fine')).display === 'none') continue;
+          const b = n.getBoundingClientRect();
+          if (!b.width && !b.height) continue;
+          top = Math.min(top, b.top); bottom = Math.max(bottom, b.bottom); left = Math.min(left, b.left); right = Math.max(right, b.right);
+        }
+        if (top < bar.top - 0.5 || bottom > bar.bottom + 0.5 || top < 0) out.push(`${frame}: the frame leaves the header (${Math.round(top - bar.top)} / ${Math.round(bar.bottom - bottom)} px)`);
+        const b = badge.getBoundingClientRect();
+        if (b.top < bar.top || b.bottom > bar.bottom || !b.width) out.push(`${frame}: the level badge is clipped`);
+        if (Number(getComputedStyle(badge).zIndex) <= Number(getComputedStyle(overlay ?? badge).zIndex || 0)) out.push(`${frame}: the level badge sits under the frame`);
+        if (Math.abs(r.width - ring.querySelector('svg').getBoundingClientRect().width) > 1) out.push(`${frame}: the XP ring is not the plate ring`);
+        still.remove();
+        return { out, bar: bar.height };
+      }, frame);
+      issues.push(...got.out);
+      if (barHeight === null) barHeight = got.bar;
+      else if (Math.abs(barHeight - got.bar) > 0.5) issues.push(`${frame}: the header height changes`);
+    }
+    record(`frames: the header plate wears its frame inside the header on PC ${w}x${h} @${scale}`, { issues, blank: null, pageScroll: false });
+  }
 }
 if (!process.env.FIT_LIVE) console.log(report.join('\n'));
 if (process.env.FIT_REPORT) writeFileSync(process.env.FIT_REPORT, report.join('\n'));
