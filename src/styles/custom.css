@@ -1,0 +1,152 @@
+.theme-card.is-custom .theme-swatch {
+  background: conic-gradient(from 200deg, #f472b6, #fbbf24, #a3e635, #22d3ee, #a78bfa, #f472b6);
+}
+.theme-card.is-custom .theme-swatch span { opacity: 0.86; }
+
+.custom-theme {
+  display: grid;
+  gap: 16px;
+  padding: 0 var(--gutter);
+}
+
+.ct-intro { display: grid; gap: 10px; }
+.ct-intro p { font-size: 0.84rem; line-height: 1.5; color: var(--ink-dim); }
+.ct-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.ct-side { display: grid; gap: 10px; align-content: start; }
+
+.ct-preview {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  border: var(--border) var(--border-style) var(--line-strong);
+  background: var(--ct-bg, var(--surface-solid));
+  box-shadow: var(--surface-shadow);
+  overflow: hidden;
+}
+.ct-preview .label { color: var(--ink-faint); }
+.ct-panel {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: var(--border) var(--border-style) var(--line);
+  background: var(--surface);
+  box-shadow: var(--surface-shadow);
+  backdrop-filter: var(--blur);
+}
+.ct-panel h4 { font-size: 1.02rem; color: var(--ink); }
+.ct-pv-ink { font-size: 0.84rem; color: var(--ink); }
+.ct-pv-dim { font-size: 0.78rem; color: var(--ink-dim); }
+.ct-pv-faint { font-size: 0.7rem; color: var(--ink-faint); letter-spacing: var(--label-tracking); text-transform: uppercase; }
+.ct-pv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; pointer-events: none; }
+.ct-pv-signals { display: flex; gap: 12px; font-weight: 800; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.ct-pv-signals .is-pos { color: var(--positive); }
+.ct-pv-signals .is-neg { color: var(--negative); }
+.ct-pv-signals .is-warn { color: var(--warning); }
+.ct-solid {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  border: var(--border) var(--border-style) var(--line);
+  background: var(--surface-solid);
+  font-size: 0.76rem;
+  color: var(--ink-dim);
+}
+
+.ct-warnings { display: grid; gap: 6px; }
+.ct-warn, .ct-ok {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+.ct-warn { color: var(--warning); background: color-mix(in srgb, var(--warning) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
+.ct-ok { color: var(--positive); background: color-mix(in srgb, var(--positive) 10%, transparent); }
+.ct-warn svg, .ct-ok svg { flex: none; margin-top: 2px; }
+
+.ct-controls { display: grid; gap: 18px; }
+.ct-section { display: grid; gap: 10px; }
+.ct-title { font-size: 0.9rem; color: var(--ink); }
+.ct-note { font-size: 0.74rem; line-height: 1.45; color: var(--ink-dim); }
+
+.ct-presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.ct-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 6px;
+  border-radius: var(--radius-pill);
+  border: var(--border) var(--border-style) var(--line);
+  background: var(--surface);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ink-dim);
+}
+.ct-preset.is-on { border-color: var(--accent); color: var(--ink); }
+.ct-preset .theme-swatch { width: 34px; height: 20px; border-radius: var(--radius-pill); }
+
+.ct-group { display: grid; gap: 8px; }
+.ct-tokens { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ct-token {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: var(--border) var(--border-style) var(--line);
+  background: var(--surface);
+}
+.ct-token label { font-size: 0.76rem; color: var(--ink); cursor: pointer; }
+.ct-token input[type='color'] {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: var(--border) var(--border-style) var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: pointer;
+}
+.ct-token input[type='color']::-webkit-color-swatch-wrapper { padding: 2px; }
+.ct-token input[type='color']::-webkit-color-swatch { border: 0; border-radius: calc(var(--radius-sm) - 2px); }
+.ct-token input[type='color']::-moz-color-swatch { border: 0; border-radius: calc(var(--radius-sm) - 2px); }
+.ct-alpha { grid-column: 1 / -1; width: 100%; margin: 0; accent-color: var(--accent); }
+
+.ct-layers { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px; }
+.ct-layer { display: grid; gap: 6px; font-size: 0.76rem; color: var(--ink-dim); }
+.ct-layer select { width: 100%; }
+.ct-veil input { width: 100%; margin: 0; accent-color: var(--accent); }
+.ct-veil small { font-size: 0.7rem; color: var(--ink-faint); }
+
+@media (min-width: 760px) {
+  .custom-theme { grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); align-items: start; }
+  .ct-intro { grid-column: 1 / -1; }
+  .ct-side { position: sticky; top: calc(var(--header-height) + 12px); }
+}
+
+.is-pc #app .custom-theme { padding: 0; gap: 1.2rem; }
+.is-pc #app .ct-tokens { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+
+.is-pc [data-worn] {
+  --pcx-r: calc(var(--radius-sm) * var(--pc-s));
+  --pcx-r-lg: calc(var(--radius) * var(--pc-s));
+  --pcx-rim: var(--border) var(--border-style) var(--line);
+  --pcx-rim-soft: var(--border) var(--border-style) color-mix(in srgb, var(--line) 70%, transparent);
+  --pcx-hi: inset 0 1px 0 color-mix(in srgb, var(--ink) 9%, transparent);
+  --pcx-glass: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface-solid) 86%, var(--ink) 6%),
+    color-mix(in srgb, var(--surface-solid) 92%, #000 8%));
+  --pcx-glass-2: linear-gradient(180deg,
+    color-mix(in srgb, var(--surface-solid) 80%, var(--ink) 10%),
+    color-mix(in srgb, var(--surface-solid) 90%, var(--ink) 4%));
+  --pcx-well: color-mix(in srgb, var(--surface-solid) 70%, #000 30%);
+  --pcx-display: var(--font-display);
+}
+[data-worn] {
+  --logo-inner: color-mix(in srgb, var(--accent) 58%, #0b0d16);
+  --logo-outer: color-mix(in srgb, var(--accent) 14%, #07080d);
+}
