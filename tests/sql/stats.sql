@@ -12,10 +12,11 @@ select t_is('a list too long or not all numbers is dropped', stats_clean('{"cNw"
 select t_is('a hidden summary keeps only its day', stats_clean('{"off":1,"at":5,"cC":3}'::jsonb) = '{"v":1,"off":1,"at":5}'::jsonb);
 select t_is('an oversized summary is refused', stats_clean(jsonb_build_object('cC', 1, 'pad', repeat('x', 7000))) is null);
 select t_is('not an object is refused', stats_clean('[1,2]'::jsonb) is null);
+select t_is('wallet and spending numbers are never kept', stats_clean('{"cC":3,"eC":4321,"eI":87,"eSp":8400,"eSe":1530,"eTr":2}'::jsonb) = '{"v":1,"cC":3}'::jsonb);
 
 set role authenticated;
 select set_config('request.jwt.claim.sub', '5a000000-0000-0000-0000-000000000001', false);
 update profiles set stats = '{"cC":12,"eC":-3,"bR":42,"name":"<b>x</b>","cNw":[0,0,4]}' where id = '5a000000-0000-0000-0000-000000000001';
 reset role;
-select t_is('a player writing their own stats gets them cleaned', (select stats = '{"v":1,"cC":12,"eC":0,"bR":7,"cNw":[0,0,4]}'::jsonb from profiles where id = '5a000000-0000-0000-0000-000000000001'));
+select t_is('a player writing their own stats gets them cleaned', (select stats = '{"v":1,"cC":12,"bR":7,"cNw":[0,0,4]}'::jsonb from profiles where id = '5a000000-0000-0000-0000-000000000001'));
 select t_is('the size check is in place', exists (select 1 from pg_constraint where conname = 'profiles_stats_size'));

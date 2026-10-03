@@ -10651,7 +10651,6 @@ declare
   v_nums constant text[] := array['at','off',
     'cC','cU','cV','cF','cS','cX','cP','cB','cBa','cAs','cAc','cAe','cAm',
     'bN','bC','bH','bPd','bPl','bS','bT','bW','bA','bLd','bLv','bLn','bR','bRa',
-    'eC','eI','eSp','eSb','eSo','eSe','eFu','eLs','eLb','eLw','eBi','eTr','eGs','eGr','eIe','eIs','eAt',
     'aD','aSt','aSb','aG','aQ','aQh','aA','aAt','aSp','aSi','aSx','aSn','aR','aBr',
     'gWp','gWw','gWs','gWb','gQp','gQw','gQf','gDb','gDr','gRr','gRf','gVp','gVw','gP',
     'sF','sGd','sGg','sGm','sMs','sCv','sK','sSh','sSm'];
@@ -10696,6 +10695,9 @@ drop trigger if exists profile_stats_guard on public.profiles;
 create trigger profile_stats_guard
   before insert or update of stats on public.profiles
   for each row execute function public.profile_stats_guard();
+
+update public.profiles set stats = public.stats_clean(stats)
+  where stats ?| array['eC','eI','eSp','eSb','eSo','eSe','eFu','eLs','eLb','eLw','eBi','eTr','eGs','eGr','eIe','eIs','eAt'];
 
 create or replace function public.friend_pictures_writer()
 returns boolean language plpgsql stable security definer set search_path = public, pg_temp as $$

@@ -2,7 +2,7 @@ import { el, navTabFor, showScreen, state } from './core.js';
 import { live } from './live.js';
 import { closeDrawer } from './drawer.js';
 import { skipToSummary } from './open.js';
-import { renderFriends } from './social.js';
+import { leaveFriend, renderFriends, returnToFriend } from './social.js';
 import { on } from '../ui/bus.js';
 import { updateLocked } from './update.js';
 import { closeDropdown, dropdownOpen } from '../ui/dropdown.js';
@@ -21,6 +21,8 @@ function screenNow() {
 
 function parentOf(screen) {
   if (screen === 'chat' && state.chatFrom === 'discussions') return 'discussions';
+  if (screen === 'chat' && state.chatFrom === 'friend' && state.viewing) return 'friend';
+  if (screen === 'friend') return state.friendFrom ?? 'friends';
   if (PARENT[screen]) return PARENT[screen];
   const tab = navTabFor(screen);
   if (tab !== screen) return tab;
@@ -53,7 +55,8 @@ export function goBack() {
   }
   const parent = parentOf(screen);
   if (!parent) return false;
-  if (screen === 'friend') { state.viewing = null; renderFriends(); }
+  if (screen === 'friend') { leaveFriend(); return true; }
+  if (parent === 'friend') { el.chatBack?.click(); return true; }
   if (parent === 'discussions') { import('./inbox.js').then((m) => m.openTarget('discussions')); return true; }
   if (parent === 'friends') renderFriends();
   showScreen(parent);

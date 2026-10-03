@@ -2,7 +2,7 @@ import { buildPackElement } from '../packview.js';
 import * as store from '../collection.js';
 import { specId, specName, specTagline } from '../booster.js';
 import { iconSvg } from '../data/icons.js';
-import { getLanguage, t, tx } from '../i18n.js';
+import { getLanguage, lineTurn, t, tx } from '../i18n.js';
 import { proceduralStyle } from '../packstyle.js';
 import { monogramSvg } from '../data/emblems.js';
 import { press } from '../ui/components.js';
@@ -75,7 +75,7 @@ function paintPacks() {
     packsRail.setItems([]);
     el.packsEmpty.hidden = custom;
     el.packsEmptyMark.innerHTML = iconSvg('packs', { size: 46 });
-    el.packsEmptyText.textContent = t('shelfEmpty');
+    el.packsEmptyText.textContent = t('shelfEmpty', { pick: lineTurn() });
     el.packsEmptyCta.textContent = t('goShop');
     el.packsEmptyCta.hidden = false;
     return;

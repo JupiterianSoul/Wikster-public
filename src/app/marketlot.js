@@ -13,6 +13,7 @@ import { live } from './live.js';
 import { econ, serverEconomy } from './econ.js';
 import { isRunning, keepPending, pending, stillSending } from './pending.js';
 import { renderBinder } from './binder.js';
+import './playertag.js';
 import {
   M, agoText, buyoutLive, findLot, floorOf, fmtLeft, leftMs, marketError, paintList, priceOf, rarityName, reload, upsertLot
 } from './market.js';
@@ -81,7 +82,8 @@ function paint() {
   lines.innerHTML = [
     line(t('marketPrint'), `<span style="color:${rarityText(rarity)}">${esc(rarity ? tx(rarity.name) : '')}</span>`),
     line(t('marketCardValue'), money(lot.card?.price ?? 0)),
-    line(t('marketSellerLine'), esc(lot.mine ? t('marketYou') : (lot.seller_name || '?'))),
+    line(t('marketSellerLine'), lot.mine || !lot.seller ? esc(lot.mine ? t('marketYou') : (lot.seller_name || '?'))
+      : `<button type="button" class="market-seller" data-player="${esc(lot.seller)}" data-player-name="${esc(lot.seller_name || '')}">${esc(lot.seller_name || '?')}</button>`),
     open
       ? line(t('marketTimeLeft'), `<span class="market-time" data-ends="${esc(lot.ends_at)}">${esc(fmtLeft(leftMs(lot)))}</span>`)
       : line(t('marketClosed'), esc(agoText(lot.settled_at ?? lot.ends_at))),

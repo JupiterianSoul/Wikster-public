@@ -1087,5 +1087,19 @@ export const RELEASES = [
       { en: 'Messages to friends arrive faster.',
         fr: 'Les messages entre amis arrivent plus vite.' }
     ]
+  },
+  {
+    id: 'player-profiles', icon: 'friends', accent: '#38bdf8',
+    title: { en: 'Player profiles', fr: 'Les profils des joueurs' },
+    points: [
+      { en: 'Tap a name on the leaderboard, in a guild, on the market or in a trade to see that player', fr: 'Touchez un nom dans le classement, une guilde, le marché ou un échange pour voir ce joueur' },
+      { en: 'A new header in their own style, and the same Statistics page as yours', fr: 'Un nouvel en-tête dans leur propre style, et la même page de statistiques que la vôtre' }
+    ],
+    changelog: [
+      { en: 'Message, Trade, Gift, Challenge and Wishlist sit under the header. Remove friend, Report and Block are in the menu at the top right. Players who are not your friends yet can be added from their page.',
+        fr: 'Message, Échanger, Offrir, Défier et Souhaits sont sous l\u2019en-tête. Retirer cet ami, Signaler et Bloquer sont dans le menu en haut à droite. Les joueurs qui ne sont pas encore vos amis peuvent être ajoutés depuis leur page.' },
+      { en: 'Back takes you to where you came from.',
+        fr: 'Retour vous ramène là d\u2019où vous veniez.' }
+    ]
   }
 ];

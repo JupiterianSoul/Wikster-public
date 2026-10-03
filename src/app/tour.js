@@ -87,7 +87,14 @@ export function startTour({ force = false, done = null } = {}) {
     const bodyKey = typeof step.body === 'function' ? step.body() : step.body;
     root.querySelector('.tour-count').textContent = t('tourCount', { n: index + 1, total: steps.length });
     root.querySelector('.tour-title').textContent = t(step.title);
-    root.querySelector('.tour-body').textContent = t(bodyKey);
+    const body = root.querySelector('.tour-body');
+    body.textContent = t(bodyKey);
+    if (index === steps.length - 1) {
+      const outro = document.createElement('strong');
+      outro.className = 'tour-outro';
+      outro.textContent = t('tourOutro');
+      body.append(outro);
+    }
     next.textContent = index === steps.length - 1 ? t('tourDone') : t('tourNext');
     skip.hidden = index === steps.length - 1;
     requestAnimationFrame(place);

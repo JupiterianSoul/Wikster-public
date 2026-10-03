@@ -105,7 +105,19 @@ check('no section is marked private', await page.locator('#stat-grid .stat-sec-n
 const summary = await page.evaluate(() => window.__wikster.statsSummary());
 const summaryText = JSON.stringify(summary);
 check('the public summary is small and carries no card names', summaryText.length < 1500 && !/Alpha|Omega|en:/.test(summaryText), summaryText);
-check('it holds what the board shows', summary.cC === 7 && summary.bN === 37 && summary.eSp === 8400 && summary.aSt === 11 && summary.gQp === 6 && summary.bR === 5, summaryText);
+check('it holds what the board shows', summary.cC === 7 && summary.bN === 37 && summary.aSt === 11 && summary.gQp === 6 && summary.bR === 5, summaryText);
+const ownBoard = await page.evaluate(() => [...document.querySelectorAll('#stat-grid .stat-sec')].map((sec) => ({ sec: sec.dataset.sec, tiles: [...sec.querySelectorAll('.stat-cell')].map((c) => c.dataset.stat) })));
+const seenBoard = await page.evaluate((s) => window.__wikster.publicBoard(s, { cards: 7, unique_cards: 4, collection_value: 1590, boosters_opened: 37, play_ms: 19200000, created_at: '2026-01-15T12:00:00Z' }), summary);
+check('the summary carries no wallet or spending number', Object.keys(summary).every((k) => !k.startsWith('e')), summaryText);
+const shared = ownBoard.filter((o) => o.sec !== 'economy');
+check('another player sees the same sections, except the economy', JSON.stringify(seenBoard.map((x) => x.sec)) === JSON.stringify(shared.map((x) => x.sec)), JSON.stringify(seenBoard.map((x) => x.sec)));
+check('and every other tile the owner sees', shared.every((o) => o.tiles.every((id) => seenBoard.find((x) => x.sec === o.sec)?.tiles.includes(id))),
+  JSON.stringify(shared.map((o) => [o.sec, o.tiles.filter((id) => !seenBoard.find((x) => x.sec === o.sec)?.tiles.includes(id))])));
+const leaky = await page.evaluate(() => window.__wikster.publicBoard({ v: 1, at: 20700, cC: 3, eC: 4321, eI: 87, eSp: 8400 }, { cards: 3 }));
+check('a visited profile never shows an economy section, even from an old summary', !leaky.some((x) => x.sec === 'economy'), JSON.stringify(leaky));
+const bareBoard = await page.evaluate(() => window.__wikster.publicBoard(null, { cards: 7, unique_cards: 4, collection_value: 1590, boosters_opened: 37, best_rarity: 'mythic', play_ms: 19200000, created_at: '2026-01-15T12:00:00Z', level: 14 }));
+check('with no summary the same board is drawn from the public columns', JSON.stringify(bareBoard.map((x) => x.sec)) === JSON.stringify(['collection', 'boosters', 'activity', 'social']), JSON.stringify(bareBoard));
+check('only the tiles those columns can fill', JSON.stringify(bareBoard.map((x) => x.tiles)) === JSON.stringify([['copies', 'unique', 'value'], ['boosters', 'bestPull'], ['level', 'playtime', 'since'], ['showcase']]), JSON.stringify(bareBoard.map((x) => x.tiles)));
 await page.evaluate(() => { window.__wikster.state.profile.settings.publicStats = false; });
 check('turned off in Settings, it says only that it is hidden', JSON.stringify(await page.evaluate(() => window.__wikster.statsSummary())).length < 40);
 await page.evaluate(() => { window.__wikster.state.profile.settings.publicStats = true; });

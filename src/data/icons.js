@@ -255,6 +255,7 @@ const ICONS = {
   cloud: `
     <path d="M7.4 18.4a4.4 4.4 0 0 1-.6-8.8 5.4 5.4 0 0 1 10.3 1.2 3.8 3.8 0 0 1-.5 7.6z"/>`,
   menu: `<path d="M4 7h16M4 12h16M4 17h16"/>`,
+  more: `<circle cx="5.6" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/><circle cx="18.4" cy="12" r="1.5" fill="currentColor" stroke="none"/>`,
   home: `<path d="M3.8 11.2 12 4.4l8.2 6.8"/><path d="M6 9.6v9.8h4.4v-5.4h3.2v5.4H18V9.6"/>`,
   keyboard: `<rect x="2.8" y="6.4" width="18.4" height="11.2" rx="2"/><path d="M6.4 10h.01M9.6 10h.01M12.8 10h.01M16 10h.01M7.6 14h8.8"/>`,
   wish: `

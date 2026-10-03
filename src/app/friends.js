@@ -34,6 +34,13 @@ import { makeBadge, paintSocialTabs } from './inbox.js';
 import { fxOn, sceneFor, wearLook } from './lookview.js';
 import { markThumb } from './mature.js';
 import { lastSeenText, onlineNow, openChat, paintAvatarInto, paintRingFace, personRow, refreshTrades, socialAction, socialError, statsSeen, syncSocial } from './social.js';
+import { openFriend, openPlayer } from './player.js';
+import './playertag.js';
+
+export {
+  freshFriendStats, leaveFriend, openFriend, openFriendWishlist, openPlayer, paintFriendPresence,
+  paintFriendStats, refreshViewedRelation, relationOf, renderFriend, returnToFriend, STATS_TTL, statsAge
+} from './player.js';
 
 export function isFavFriend(id) {
   return ((state.profile.favFriends ?? []).includes(id));
@@ -289,6 +296,14 @@ export function openTradeAnswer(trade) {
   const who = state.social.friends.find((f) => f.otherId === trade.proposer);
   const name = who?.profile?.username ?? '?';
   openSheet(t('tradeFromTitle', { name }), (body) => {
+    const face = document.createElement('button');
+    face.type = 'button';
+    face.className = 'trade-who';
+    face.dataset.player = trade.proposer;
+    face.dataset.playerName = name;
+    face.innerHTML = `<span class="person-mark" aria-hidden="true"></span><span class="trade-who-name"></span>${iconSvg('chevronRight', { size: 16 })}`;
+    face.querySelector('.trade-who-name').textContent = t('chatSeeProfile', { name });
+    paintAvatarInto(face.querySelector('.person-mark'), who?.profile ?? { username: name });
     const line = (cards, labelKey) => `
       <p class="label" style="margin:10px 0 6px">${esc(t(labelKey))}</p>
       ${cards.map((c) => `<p class="trade-line"><b>${esc(c.title)}</b>
@@ -304,6 +319,7 @@ export function openTradeAnswer(trade) {
         <button class="btn btn-ghost btn-sm" type="button" data-report></button>
       </div>
       <p class="find-status" data-status role="status"></p>`;
+    body.prepend(face);
     const acceptBtn = body.querySelector('[data-accept]');
     const declineBtn = body.querySelector('[data-decline]');
     acceptBtn.textContent = t('tradeAccept');
@@ -600,6 +616,7 @@ export function renderFriends() {
   for (const entry of incoming) known.set(entry.otherId, { kind: 'incoming', entry });
   for (const entry of outgoing) known.set(entry.otherId, { kind: 'outgoing', entry });
 
+  const seeOf = (person) => () => openPlayer(person.id, { name: person.username, level: person.level, from: 'friends' });
   el.findResults.replaceChildren(...results.map((person) => {
     const link = known.get(person.id);
     if (link?.kind === 'friend') {
@@ -607,11 +624,11 @@ export function renderFriends() {
     }
     if (link?.kind === 'incoming') {
       return personRow(person, [['friendsAccept', 'btn-primary', () => socialAction(
-        () => account.acceptRequest(link.entry.id), 'friendsAccepted', { name: person.username })]]);
+        () => account.acceptRequest(link.entry.id), 'friendsAccepted', { name: person.username })]], { onOpen: seeOf(person) });
     }
-    if (link?.kind === 'outgoing') return personRow(person, [], { note: 'friendsPending' });
+    if (link?.kind === 'outgoing') return personRow(person, [], { note: 'friendsPending', onOpen: seeOf(person) });
     return personRow(person, [['friendsAdd', 'btn-primary', () => socialAction(
-      () => account.sendRequest(userId(), person.id), 'friendsSent', { name: person.username })]]);
+      () => account.sendRequest(userId(), person.id), 'friendsSent', { name: person.username })]], { onOpen: seeOf(person) });
   }));
 
   el.incomingList.replaceChildren(...incoming.filter((entry) => entry.profile && !entry.provisional && !isBlocked(entry.otherId)).map((entry) =>
@@ -620,7 +637,7 @@ export function renderFriends() {
         () => account.acceptRequest(entry.id), 'friendsAccepted', { name: entry.profile.username })],
       ['friendsDecline', 'btn-ghost', () => socialAction(
         () => account.removeFriendship(entry.id), 'friendsRemoved')]
-    ], { data: { request: entry.id } })));
+    ], { data: { request: entry.id }, onOpen: () => openPlayer(entry.otherId, { name: entry.profile.username, level: entry.profile.level, from: 'friends' }) })));
 
   const orderedFriends = [...friends].sort((a, b) =>
     (isFavFriend(b.otherId) - isFavFriend(a.otherId))
@@ -696,7 +713,7 @@ export function renderFriends() {
     personRow(entry.profile, [
       ['friendsCancel', 'btn-ghost', () => socialAction(
         () => account.removeFriendship(entry.id), 'friendsRemoved')]
-    ])));
+    ], { onOpen: () => openPlayer(entry.otherId, { name: entry.profile.username, level: entry.profile.level, from: 'friends' }) })));
 
   el.resultsHead.hidden = !results.length;
   el.incomingHead.hidden = !el.incomingList.childElementCount;
@@ -717,287 +734,6 @@ export function renderFriends() {
   reveal(el.friendsList.children, { step: 26, from: 10 });
 }
 
-export function openFriend(entry) {
-  state.viewing = entry;
-  renderFriend();
-  showScreen('friend');
-  loadFriendCards(entry);
-}
-
-export let friendSeg;
-
-export function paintFriendPresence() {
-  const person = state.viewing?.profile;
-  if (!person) return;
-  const level = clampLevel(person.level);
-  const online = onlineNow(person);
-  const since = online ? '' : lastSeenText(person);
-  el.friendRank.innerHTML = (online === null ? ''
-    : `<span class="presence-dot is-inline${online ? ' is-online' : ''}"></span> `
-      + esc(online ? t('friendOnline') : t('friendOffline')) + ' · ')
-    + esc(tx(rankFor(level).name))
-    + (since ? `<small class="friend-seen">${esc(since)}</small>` : '');
-}
-
-export function renderFriend() {
-  const entry = state.viewing;
-  if (!entry) return;
-  const person = entry.profile;
-  const level = clampLevel(person.level);
-
-  entry.look = wearLook(el.screens.friend, person.appearance);
-  sceneFor(entry.look);
-  el.friendBack.innerHTML = iconSvg('chevronLeft', { size: 18 });
-  el.friendName.textContent = person.username ?? '';
-  live.friendRing.set(level >= MAX_LEVEL ? 1 : 0, String(level));
-  el.friendRing.classList.toggle('is-max', level >= MAX_LEVEL);
-  paintFrameInto(el.friendRing, person.avatar?.frame?.style ?? null, person.avatar?.frame?.style ? frameTier(level) : 0);
-  paintRingFace(el.friendRing, person);
-  el.friendLevel.textContent = level >= MAX_LEVEL ? t('profileMax') : t('profileLevel', { n: level });
-  paintFriendPresence();
-  el.friendStatsLabel.textContent = t('profileStats');
-  el.friendRarityLabel.textContent = t('statRarity');
-  el.friendCardsLabel.textContent = t('friendCollection');
-  el.friendRemove.textContent = t('friendsRemove');
-
-  const actionBtn = (icon, labelKey, run, kind = 'btn-ghost') => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = `btn btn-sm ${kind}`;
-    btn.innerHTML = `${iconSvg(icon, { size: 15 })}<span style="margin-left:6px">${esc(t(labelKey))}</span>`;
-    press(btn, { sound: null });
-    btn.addEventListener('click', () => { synth.playTap(); run(); });
-    return btn;
-  };
-  el.friendActions.replaceChildren(
-    actionBtn('chat', 'chatOpen', () => openChat(entry), 'btn-primary'),
-    actionBtn('trade', 'tradeOpen', () => openTradeSheet(entry)),
-    actionBtn('gift', 'giftOpen', () => openGiftChooser(entry)),
-    actionBtn('wish', 'wishTitle', () => openFriendWishlist(entry)),
-    actionBtn('dice', 'friendChallenge', () => import('./versus.js').then((m) => { showScreen('versus'); m.renderVersus({ friendId: entry.otherId }); })),
-    actionBtn('flag', 'reportPlayer', () => openReport({ kind: 'player', target: entry.otherId, name: person.username ?? '' })),
-    actionBtn('block', 'blockPlayer', () => confirmBlock({ id: entry.otherId, name: person.username ?? '' }, () => {
-      state.viewing = null;
-      state.social.friends = state.social.friends.filter((f) => f.otherId !== entry.otherId);
-      showScreen('friends');
-      renderFriends();
-      syncSocial();
-    }))
-  );
-
-  if (!friendSeg) {
-    friendSeg = new Segmented(el.friendSeg, [
-      { id: 'albums', label: t('viewAlbums') },
-      { id: 'classic', label: t('viewClassic') }
-    ], (view) => {
-      state.friendView = view;
-      paintFriendCards();
-    });
-  }
-  friendSeg.relabel([{ label: t('viewAlbums') }, { label: t('viewClassic') }]);
-  friendSeg.select(state.friendView, { silent: true });
-
-  paintFriendStats(entry);
-  paintFriendShowcase(entry);
-  paintFriendBadges(entry);
-  freshFriendStats(entry);
-}
-
-export function friendAch(profile) {
-  const raw = profile?.badges;
-  return Array.isArray(raw) ? null : (Number.isFinite(raw?.ach) ? raw.ach : null);
-}
-
-export function paintFriendBadges(entry) {
-  loadHonours().then((m) => m.paintFriendBadges(entry)).catch(() => {});
-}
-
-export async function paintFriendShowcase(entry) {
-  const person = entry.profile;
-  const pins = (Array.isArray(person?.showcase) ? person.showcase : []).filter((c) => c && c.key).slice(0, SHOWCASE_MAX).map((c) => withSpecialPhoto({ ...c }));
-  el.friendShowcaseHead.hidden = !pins.length;
-  el.friendShowcase.hidden = !pins.length;
-  if (!pins.length) return;
-  el.friendShowcaseLabel.textContent = t('showcaseFriendLabel');
-  const me = userId();
-  let hearts = recall('kudos', entry.otherId) ?? [];
-  let touched = false;
-  const painters = [];
-  const count = (key) => hearts.filter((k) => k.key === key).length;
-  const mine = (key) => hearts.some((k) => k.key === key && k.sender === me);
-  const fetching = account.showcaseKudos(entry.otherId).then((rows) => rows ?? [], () => null);
-  el.friendShowcase.replaceChildren(...pins.map((card) => {
-    const slot = document.createElement('div');
-    slot.className = 'showcase-slot';
-    const node = fxOn(buildStaticCard(card, rarityOfCard(card), null, { fav: false, wish: false }), entry.look, rarityOfCard(card));
-    node.addEventListener('click', () => openCardDetail(card.key, card, rarityOfCard(card)));
-    const heart = document.createElement('button');
-    heart.type = 'button';
-    heart.className = `showcase-kudos${mine(card.key) ? ' is-on' : ''}`;
-    const paint = () => {
-      heart.classList.toggle('is-on', mine(card.key));
-      heart.innerHTML = `${iconSvg('heart', { size: 14 })}<span class="tabular"></span>`;
-      heart.querySelector('span').textContent = String(count(card.key));
-      heart.setAttribute('aria-label', t(mine(card.key) ? 'showcaseKudosTaken' : 'showcaseKudosLabel'));
-    };
-    paint();
-    const flip = (on) => {
-      hearts = on ? [...hearts, { key: card.key, sender: me }] : hearts.filter((k) => !(k.key === card.key && k.sender === me));
-      remember('kudos', entry.otherId, hearts, { disk: false });
-    };
-    let confirmed = mine(card.key);
-    let sending = false;
-    painters.push(() => { confirmed = mine(card.key); paint(); });
-    const settle = async () => {
-      if (sending) return;
-      sending = true;
-      while (mine(card.key) !== confirmed) {
-        const on = mine(card.key);
-        try {
-          await account.setKudos(entry.otherId, card.key, me, on);
-          confirmed = on;
-          if (on) { bump(state.profile, 'kudosGiven'); store.saveProfile(state.profile); }
-        } catch (error) {
-          flip(confirmed);
-          paint();
-          toast(esc(describeError(error)), 'error');
-          break;
-        }
-      }
-      sending = false;
-    };
-    press(heart, { sound: null });
-    heart.addEventListener('click', () => {
-      touched = true;
-      flip(!mine(card.key));
-      synth.playTap();
-      paint();
-      settle();
-    });
-    slot.append(node, heart);
-    return slot;
-  }));
-  const fresh = await fetching;
-  if (!fresh || touched || state.viewing !== entry) return;
-  hearts = fresh;
-  remember('kudos', entry.otherId, hearts, { disk: false });
-  for (const fn of painters) fn();
-}
-
-export const STATS_TTL = 30000;
-const statsBusy = new Map();
-
-export function statsAge(id) {
-  const at = statsSeen.get(id);
-  return at ? Date.now() - at : Infinity;
-}
-
-export function paintStamp(node, id) {
-  if (!node) return;
-  const busy = statsBusy.has(id);
-  const age = statsAge(id);
-  const fresh = age < STATS_TTL;
-  node.classList.toggle('is-busy', busy);
-  if (busy && !fresh) {
-    node.hidden = false;
-    node.textContent = t('statsUpdating');
-  } else if (!fresh && Number.isFinite(age)) {
-    node.hidden = false;
-    node.textContent = t('statsUpdatedAt', { when: whenText(new Date(Date.now() - age).toISOString()) });
-  } else {
-    node.hidden = true;
-    node.textContent = '';
-  }
-}
-
-export function freshFriendStats(entry, { force = false } = {}) {
-  const id = entry?.otherId;
-  if (!id || !signedIn()) return Promise.resolve(false);
-  if (!force && statsAge(id) < STATS_TTL) { paintStamp(el.friendStatsStamp, id); return Promise.resolve(false); }
-  if (statsBusy.has(id)) return statsBusy.get(id);
-  const run = (async () => {
-    let changed = false;
-    let lookMoved = false;
-    try {
-      const row = await account.profileStats(id);
-      if (row) {
-        const before = JSON.stringify(entry.profile);
-        const lookBefore = JSON.stringify(entry.profile.appearance ?? null);
-        Object.assign(entry.profile, row);
-        lookMoved = lookBefore !== JSON.stringify(entry.profile.appearance ?? null);
-        const friend = state.social.friends.find((f) => f.otherId === id);
-        if (friend && friend !== entry) Object.assign(friend.profile, row);
-        changed = before !== JSON.stringify(entry.profile);
-        statsSeen.set(id, Date.now());
-      }
-    } catch {}
-    statsBusy.delete(id);
-    if (state.viewing?.otherId === id && state.tab === 'friend') {
-      if (lookMoved) {
-        entry.look = wearLook(el.screens.friend, entry.profile.appearance);
-        sceneFor(entry.look);
-        paintFriendShowcase(entry);
-      }
-      if (changed) { paintFriendStats(entry); paintFriendBadges(entry); }
-      else paintStamp(el.friendStatsStamp, id);
-    }
-    return changed;
-  })();
-  statsBusy.set(id, run);
-  if (state.viewing?.otherId === id) paintStamp(el.friendStatsStamp, id);
-  return run;
-}
-
-export function paintFriendStats(entry) {
-  const person = entry.profile;
-  const cards = Array.isArray(entry.cards) ? entry.cards : null;
-  const best = rarityById(person.best_rarity);
-  const stats = [
-    [t('statPlaytime'), formatDuration(person.play_ms ?? 0)],
-    [t('statAccountAge'), new Date(person.created_at ?? Date.now())
-      .toLocaleDateString(getLanguage(), { year: 'numeric', month: 'short', day: 'numeric' })],
-    [t('statBoosters'), (person.boosters_opened ?? 0).toLocaleString()],
-    [t('statCards'), (person.cards ?? 0).toLocaleString()],
-    [t('statUnique'), (person.unique_cards ?? 0).toLocaleString()],
-    [t('statValue'), formatAmount(person.collection_value ?? 0)],
-    [t('statAchievements'), (() => { const n = friendAch(person); return n == null ? '…' : String(n); })()],
-    [t('statBest'), person.best_rarity && best ? tx(best.name) : t('none')]
-  ];
-  paintStamp(el.friendStatsStamp, entry.otherId);
-  import('./statsboard.js').then(({ paintPublicStatsBoard }) => {
-    if (state.viewing && state.viewing.otherId !== entry.otherId) return;
-    const board = paintPublicStatsBoard(el.friendStats, person.stats, person);
-    el.friendStats.className = board ? 'stat-board' : 'stat-grid';
-    if (!board) el.friendStats.replaceChildren(...stats.map(([label, value]) => {
-      const cell = document.createElement('div');
-      cell.className = 'stat-cell';
-      cell.innerHTML = '<b></b><span></span>';
-      cell.querySelector('b').textContent = value;
-      cell.querySelector('span').textContent = label;
-      return cell;
-    }));
-  }).catch(() => {});
-
-  const counts = {};
-  for (const card of cards ?? []) counts[card.rarityId] = (counts[card.rarityId] ?? 0) + (card.count ?? 1);
-  const peak = Math.max(1, ...RARITIES.map((r) => counts[r.id] ?? 0));
-  el.friendRarityLabel.parentElement.hidden = !cards;
-  el.friendRarityBars.hidden = !cards;
-  el.friendRarityBars.replaceChildren(...(cards ? RARITIES : []).map((rarity) => {
-    const count = counts[rarity.id] ?? 0;
-    const row = document.createElement('div');
-    row.className = 'rarity-row';
-    row.innerHTML = `<span class="rarity-name"></span><span class="rarity-track"></span><span class="rarity-count"></span>`;
-    const name = row.querySelector('.rarity-name');
-    name.textContent = tx(rarity.name);
-    name.style.color = rarityText(rarity);
-    const bar = new Bar(row.querySelector('.rarity-track'));
-    bar.set(count / peak, { animate: false });
-    bar.fill.style.background = rarity.color;
-    row.querySelector('.rarity-count').textContent = count.toLocaleString();
-    return row;
-  }));
-}
 export async function findWishMatches() {
   const wanted = new Map([...state.wishlist.values()].map((c) => [c.key, c]));
   const matches = [];
@@ -1039,146 +775,5 @@ export function openWishMatches() {
       row.querySelector('.person-actions').appendChild(go);
       return row;
     }));
-  });
-}
-
-export function openFriendWishlist(entry) {
-  const person = entry.profile;
-  openSheet(t('friendWishTitle', { name: person.username ?? '?' }), async (body) => {
-    body.innerHTML = `<p class="find-status is-working">${esc(t('friendLoading'))}</p>`;
-    let wishes = [];
-    let theirs = new Set();
-    try {
-      const [rows, cards] = await Promise.all([
-        account.wishlistOf(entry.otherId),
-        account.friendCollection(entry.otherId).catch(() => null)
-      ]);
-      wishes = rows;
-      theirs = new Set((cards ?? []).map((card) => card.key));
-    } catch (error) {
-      body.innerHTML = `<p class="find-status is-error"></p>`;
-      body.querySelector('p').textContent =
-        error?.message === 'INDEX_UNSET' ? t('indexUnset') : describeError(error);
-      return;
-    }
-    if (!wishes.length) {
-      body.innerHTML = `<p class="empty-note"></p>`;
-      body.querySelector('p').textContent = t('friendWishEmpty', { name: person.username ?? '?' });
-      return;
-    }
-    const grid = document.createElement('div');
-    grid.className = 'market-list';
-    grid.replaceChildren(...wishes.map((row) => {
-      const card = row.card ?? {};
-      const tile = document.createElement('div');
-      tile.className = 'auction-tile';
-      if (theirs.has(card.key)) {
-        const band = document.createElement('span');
-        band.className = 'auction-band is-good';
-        band.textContent = t('friendOwnsBand', { name: person.username ?? '?' });
-        tile.appendChild(band);
-      }
-      const rarity = rarityById(card.rarityId) ?? RARITIES[0];
-      tile.appendChild(buildStaticCard({ ...card, description: '', extract: '' }, rarity, null,
-        { fav: false, ownedTag: true }));
-      return tile;
-    }));
-    body.replaceChildren(grid);
-  });
-}
-
-export async function loadFriendCards(entry) {
-  const kept = recall('friendCards', entry.otherId);
-  entry.cards = Array.isArray(kept) ? kept : undefined;
-  paintFriendCards();
-  el.friendCardsLabel.classList.add('is-refreshing');
-  try {
-    const cards = await account.friendCollection(entry.otherId);
-    if (state.viewing !== entry) return;
-    if (Array.isArray(cards)) remember('friendCards', entry.otherId, cards, { disk: false });
-    const same = JSON.stringify(cards) === JSON.stringify(entry.cards);
-    entry.cards = cards;
-    if (!same) {
-      paintFriendCards();
-      paintFriendStats(entry);
-    }
-  } catch (error) {
-    if (state.viewing !== entry) return;
-    if (Array.isArray(entry.cards)) return;
-    entry.cards = null;
-    paintFriendCards();
-    el.friendCardsStatus.textContent = describeError(error);
-    el.friendCardsStatus.className = 'find-status is-error';
-  } finally {
-    if (state.viewing === entry) el.friendCardsLabel.classList.remove('is-refreshing');
-  }
-}
-
-export function paintFriendCards() {
-  const entry = state.viewing;
-  if (!entry) return;
-  const classic = state.friendView === 'classic';
-  const cards = entry.cards;
-  el.friendAlbums.replaceChildren();
-  el.friendClassic.replaceChildren();
-  el.friendAlbums.hidden = classic;
-  el.friendClassic.hidden = !classic;
-  el.friendSegWrap.hidden = !Array.isArray(cards) || !cards.length;
-
-  if (cards === undefined) {
-    el.friendCardsStatus.textContent = t('friendLoading');
-    el.friendCardsStatus.className = 'find-status is-working';
-    return;
-  }
-  if (cards === null) {
-    el.friendCardsStatus.textContent = t('friendPrivate');
-    el.friendCardsStatus.className = 'find-status is-muted';
-    return;
-  }
-  el.friendCardsStatus.textContent = cards.length ? '' : t('friendNoCards');
-  el.friendCardsStatus.className = 'find-status is-muted';
-
-  const albums = buildAlbums(cards, []).filter((a) => a.unlocked);
-  if (classic) {
-    const sorted = [...cards].sort((a, b) => rarityRank(b.rarityId) - rarityRank(a.rarityId));
-    el.friendClassic.replaceChildren(...classicSections(sorted, albums, (card) => {
-      const rarity = rarityById(card.rarityId) ?? RARITIES[0];
-      const node = fxOn(buildStaticCard(card, rarity, null, { fav: false }), entry.look, rarity);
-      node.addEventListener('click', () => { synth.playTap(); openCardDetail(card.key, card, rarity); });
-      return node;
-    }));
-    reveal(el.friendClassic.children, { step: 40 });
-    return;
-  }
-
-  el.friendAlbums.replaceChildren(...albums.map((album) => {
-    const cover = buildAlbumCover(album).cloneNode(true);
-    press(cover, { sound: null });
-    cover.addEventListener('click', () => {
-      synth.playTap();
-      openFriendAlbum(entry, album);
-    });
-    return cover;
-  }));
-  reveal(el.friendAlbums.children, { step: 22, from: 10 });
-}
-
-export function openFriendAlbum(entry, album) {
-  openSheet(`${album.name} · ${entry.profile.username}`, (body) => {
-    const grid = document.createElement('div');
-    grid.className = 'sheet-card-grid';
-    const sorted = [...album.entries]
-      .sort((a, b) => rarityRank(b.rarityId) - rarityRank(a.rarityId));
-    grid.replaceChildren(...sorted.map((card) => {
-      const node = buildStaticCard(card, rarityById(card.rarityId), null, { fav: false });
-      if ((card.count ?? 1) > 1) {
-        const badge = document.createElement('span');
-        badge.className = 'copy-badge';
-        badge.textContent = `×${card.count}`;
-        node.appendChild(badge);
-      }
-      return node;
-    }));
-    body.appendChild(grid);
   });
 }

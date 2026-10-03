@@ -12,7 +12,7 @@ const TABBED = {
   atelier: { side: true },
   season: { side: true },
   profile: { side: true },
-  friend: { side: true }
+  friend: { side: false }
 };
 
 const PAGED = {

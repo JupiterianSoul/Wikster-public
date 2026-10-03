@@ -351,31 +351,4 @@ export function friendShelf(profile) {
   return { earned, worn, ach };
 }
 
-export function paintFriendBadges(entry) {
-  const { earned, worn } = friendShelf(entry.profile);
-  el.friendBadgesLabel.textContent = t('friendBadgesLabel');
-  el.friendBadgesEmpty.hidden = earned.length > 0;
-  el.friendBadgesEmpty.textContent = t('friendBadgesEmpty', { name: entry.profile?.username ?? '' });
-  el.friendBadges.replaceChildren(...worn.map((st) => badgeChip(st, { readOnly: true })));
-  const head = el.friendBadgesLabel.parentElement;
-  head.querySelector('.badges-manage')?.remove();
-  if (!earned.length) return;
-  const all = document.createElement('button');
-  all.type = 'button';
-  all.className = 'btn btn-ghost btn-sm badges-manage';
-  all.textContent = t('friendBadgesAll', { n: earned.length });
-  press(all, { sound: null });
-  all.addEventListener('click', () => { synth.playTap(); openFriendBadges(entry, earned); });
-  head.appendChild(all);
-}
-
-export function openFriendBadges(entry, earned) {
-  openSheet(t('friendBadgesTitle', { name: entry.profile?.username ?? '' }), (body) => {
-    const grid = document.createElement('div');
-    grid.className = 'badge-grid is-all';
-    grid.replaceChildren(...earned.map((st) => badgeChip(st, { readOnly: true })));
-    body.appendChild(grid);
-  });
-}
-
 export { evaluateAchievements };

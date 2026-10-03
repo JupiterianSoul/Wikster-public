@@ -1531,6 +1531,17 @@ export async function installSupabase(page, { log = null, db = newDatabase(), sc
       }
     }
 
+    if (path === 'guild_members' && method === 'GET') {
+      db.guildOfCalls = (db.guildOfCalls ?? 0) + 1;
+      const who = params.get('user_id');
+      const found = db.guildMembers.filter((m) => !who?.startsWith('eq.') || m.user_id === who.slice(3));
+      const embed = /guilds\(/.test(params.get('select') ?? '');
+      return rows(route, found.map((m) => {
+        const g = db.guilds.find((x) => x.id === m.guild_id);
+        return embed ? { ...m, guilds: g ? { name: g.name, tag: g.tag } : null } : m;
+      }));
+    }
+
     if (path === 'profiles') {
       if (schema === 'v1') {
         const asked = params.get('select') ?? '';

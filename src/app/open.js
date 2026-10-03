@@ -1150,6 +1150,7 @@ function waitOnline(here, ms = 5000) {
 }
 
 function beginOpening(booster) {
+  state.arrivingLine = null;
   el.openScreen.classList.replace('phase-idle', 'phase-opening');
   el.openHint.textContent = '';
   el.openHint.className = 'open-hint';
@@ -1157,7 +1158,8 @@ function beginOpening(booster) {
 }
 
 export function arrivingText() {
-  return state.growing && state.landTotal > 1 ? t('boostersLanded', { n: state.landed ?? 0, total: state.landTotal }) : t('cardsArriving');
+  state.arrivingLine ??= Math.floor(Math.random() * 1e6);
+  return state.growing && state.landTotal > 1 ? t('boostersLanded', { n: state.landed ?? 0, total: state.landTotal }) : t('cardsArriving', { pick: state.arrivingLine });
 }
 
 function arrivingHint(on) {
@@ -2074,7 +2076,7 @@ export function showLevelUp(level) {
 
     body.querySelector('.level-node').textContent = String(level - 1);
     body.querySelector('.level-node.is-new').textContent = String(level);
-    body.querySelector('p').textContent = t('levelUpBody', { level, rank: tx(rank.name) });
+    body.querySelector('p').textContent = t('levelUpBody', { level, rank: tx(rank.name), pick: Math.max(0, Number(level) - 2) });
     body.querySelector('.level-reward').appendChild(rewardCard(reward, { inkAmount: inkForLevel(level) }));
 
     const bar = new Bar(body.querySelector('.level-bar'));

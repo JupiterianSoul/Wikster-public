@@ -115,6 +115,7 @@ export function loadFriends() {
     paintInbox();
     if (state.tab === 'friends') renderFriends();
     if (state.tab === 'profile') renderProfile();
+    if (state.tab === 'friend') refreshViewedRelation();
     if (state.tab === 'discussions') import('./discussions.js').then((m) => m.renderDiscussions()).catch(() => {});
     refreshWishes();
   })().finally(() => {
@@ -271,7 +272,7 @@ function afterSocial() {
   inboxReady();
   if (state.tab === 'friends') renderFriends();
   if (state.tab === 'chat' && state.chat) refreshChat();
-  if (state.tab === 'friend' && state.viewing) freshFriendStats(state.viewing);
+  if (state.tab === 'friend' && state.viewing) { refreshViewedRelation(); freshFriendStats(state.viewing); }
   if (state.tab === 'discussions') import('./discussions.js').then((m) => m.loadDiscussions({ quiet: true })).catch(() => {});
 }
 let invitesUnavailable = false;
@@ -522,6 +523,7 @@ function onFriendshipLive(type, row) {
   }
   paintInbox();
   if (state.tab === 'friends') renderFriends();
+  if (state.tab === 'friend') refreshViewedRelation();
   soon('sync', () => syncSocial(), SYNC_SOON);
 }
 
@@ -997,6 +999,10 @@ export const renderFriends = later('renderFriends');
 export const openFriend = later('openFriend');
 export const freshFriendStats = later('freshFriendStats');
 export const paintFriendPresence = later('paintFriendPresence');
+export const openPlayer = later('openPlayer');
+export const leaveFriend = later('leaveFriend');
+export const returnToFriend = later('returnToFriend');
+export const refreshViewedRelation = later('refreshViewedRelation');
 export const openGiftChooser = later('openGiftChooser');
 export const openTradeSheet = later('openTradeSheet');
 export const openTradeAnswer = later('openTradeAnswer');

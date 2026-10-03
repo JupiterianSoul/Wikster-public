@@ -56,7 +56,7 @@ import { loadHonours, refreshLevelBadge, updateBadges } from './regalia.js';
 import { applySettings } from './prefs.js';
 import { openDanger, sayDangerNote as sayWipeNote } from './danger.js';
 import { payStipend, renderShop, shopIsBuilt, showShop } from './stipend.js';
-import { chatTyped, keepChatBottom, loadFriends, openFriend, parkLiveSocial, renderFriends, runSearch, sendChat, settlePresence, socialAction, syncSocial, unparkLiveSocial } from './social.js';
+import { chatTyped, keepChatBottom, leaveFriend, loadFriends, openFriend, parkLiveSocial, renderFriends, returnToFriend, runSearch, sendChat, settlePresence, socialAction, syncSocial, unparkLiveSocial } from './social.js';
 import { restoreLive, startLiveOps } from './liveops.js';
 
 quests.useClaimedSource((key) => (key !== 'local' && serverEconomy() ? { known: true, ...(state.profile?.questDay ?? {}) } : null));
@@ -150,7 +150,7 @@ bind({
   panel: $('#panel'), panelBody: $('#panel-body'), panelToggle: $('#panel-toggle'),
   showcaseLabel: $('#showcase-label'), showcaseNote: $('#showcase-note'), showcaseGrid: $('#showcase-grid'),
   friendShowcaseHead: $('#friend-showcase-head'), friendShowcaseLabel: $('#friend-showcase-label'), friendShowcase: $('#friend-showcase'),
-  friendBadgesLabel: $('#friend-badges-label'), friendBadgesEmpty: $('#friend-badges-empty'), friendBadges: $('#friend-badges'),
+  friendBadges: $('#friend-badges'),
   guildsTitle: $('#guilds-title'), guildsIntro: $('#guilds-intro'), guildHome: $('#guild-home'), guildJoin: $('#guild-join'),
   guildTag: $('#guild-tag'), guildName: $('#guild-name'), guildAbout: $('#guild-about'), guildMeta: $('#guild-meta'),
   guildScores: $('#guild-scores'), guildLeave: $('#guild-leave'), guildDelete: $('#guild-delete'), guildInvite: $('#guild-invite'),
@@ -239,7 +239,6 @@ bind({
   friendStatsLabel: $('#friend-stats-label'), friendRarityLabel: $('#friend-rarity-label'),
   friendRarityBars: $('#friend-rarity-bars'), friendSeg: $('#friend-seg'),
   friendSegWrap: $('#friend-seg-wrap'), friendClassic: $('#friend-classic'),
-   friendRemove: $('#friend-remove'),
 
   gate: $('#gate'), gateMark: $('#gate-mark'), gateTitle: $('#gate-title'), gateBody: $('#gate-body'),
   gateSeg: $('#gate-seg'), gateSteam: $('#gate-steam'), gateForm: $('#gate-form'), gateStatus: $('#gate-status'),
@@ -500,7 +499,7 @@ export function init() {
    el.filterOpen, el.openBack, el.openSkip, el.openDone, el.sheetClose, el.starterGo,
    el.timedOpenAll, el.packsOpenAll, el.openAll,
    el.packsEmptyCta, el.creatorGo, el.findGo, el.friendBack,
-   el.friendRemove, el.gateAlt, el.oddsBtn, el.albumBack, el.chatBack, el.quizBack].forEach((node) => press(node));
+   el.gateAlt, el.oddsBtn, el.albumBack, el.chatBack, el.quizBack].forEach((node) => press(node));
 
   el.wallet.addEventListener('click', openWallet);
   el.inkBtn?.addEventListener('click', () => { import('./atelier.js').then((m) => m.openInkSheet()); });
@@ -531,7 +530,9 @@ export function init() {
   el.chatBack.addEventListener('click', () => {
     clearInterval(live.chatTimer);
     const from = state.chatFrom;
+    const talked = state.chat;
     state.chat = null;
+    if (from === 'friend' && state.viewing && state.viewing.otherId === talked?.otherId) { returnToFriend(); return; }
     if (from === 'discussions') { import('./inbox.js').then((m) => m.openTarget('discussions')); return; }
     renderFriends();
     showScreen('friends');
@@ -546,7 +547,7 @@ export function init() {
     const entry = state.chat;
     if (!entry) return;
     synth.playTap();
-    openFriend(entry);
+    openFriend(entry, { from: 'chat' });
   });
   el.albumBack.addEventListener('click', () => {
     synth.playSheet(false);
@@ -584,32 +585,8 @@ export function init() {
   el.gateAlt.onclick = gateAltAction;
   el.find.addEventListener('submit', runSearch);
   el.friendBack.addEventListener('click', () => {
-    state.viewing = null;
     synth.playTap();
-    renderFriends();
-    showScreen('friends');
-  });
-  el.friendRemove.addEventListener('click', () => {
-    const entry = state.viewing;
-    if (!entry) return;
-    if (el.friendRemove.dataset.armed !== '1') {
-      el.friendRemove.dataset.armed = '1';
-      el.friendRemove.textContent = t('friendsRemoveConfirm');
-      el.friendRemove.classList.add('btn-danger');
-      synth.playArm();
-      setTimeout(() => {
-        el.friendRemove.dataset.armed = '';
-        el.friendRemove.textContent = t('friendsRemove');
-        el.friendRemove.classList.remove('btn-danger');
-      }, 4000);
-      return;
-    }
-    el.friendRemove.dataset.armed = '';
-    el.friendRemove.textContent = t('friendsRemove');
-    el.friendRemove.classList.remove('btn-danger');
-    state.viewing = null;
-    showScreen('friends');
-    socialAction(() => account.removeFriendship(entry.id), 'friendsRemoved');
+    leaveFriend();
   });
 
   el.starterGo.addEventListener('click', () => {
@@ -775,5 +752,10 @@ window.__wikster = {
   timedTopTier,
   boosters: { readyCount, pending: () => pendingOpens().length, openAllTimed },
   resetAll: () => openDanger('all'),
-  statsSummary: () => import('./statsboard.js').then((m) => m.publicSummary())
+  statsSummary: () => import('./statsboard.js').then((m) => m.publicSummary()),
+  publicBoard: (raw, row = {}) => import('./statsboard.js').then((m) => {
+    const node = document.createElement('div');
+    if (!m.paintPublicStatsBoard(node, raw, row)) m.paintPartialStatsBoard(node, row, {});
+    return [...node.querySelectorAll('.stat-sec')].map((sec) => ({ sec: sec.dataset.sec, tiles: [...sec.querySelectorAll('.stat-cell')].map((c) => c.dataset.stat) }));
+  })
 };

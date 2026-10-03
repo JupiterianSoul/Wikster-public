@@ -83,7 +83,7 @@ Only when the task needs them:
 - Supabase: `supabase/schema.sql` is run by hand by Gabriel in the SQL editor (it is idempotent). Edge functions in `supabase/functions/*` deploy through `.github/workflows/supabase.yml`.
 - The website is `https://wikster.pages.dev/`, built by Cloudflare Pages from `main`. No workflow deploys it.
 - Android: `android/`, built only by hand through `.github/workflows/android.yml` (workflow_dispatch). JS bridges: WiksterBack, WiksterHaptics, WiksterShare, WiksterCrash, WiksterPush, WiksterBilling, WiksterAds.
-- Desktop: `desktop/src-tauri/` (Tauri 2 + steamworks), built by `desktop.yml` on `v*` tags.
+- Desktop: `desktop/src-tauri/` (Tauri 2 + steamworks), built by `desktop.yml` on `v*` tags. Like Android it opens https://wikster.pages.dev/ when the site answers within about 3.5 s and the bundled `dist` copy otherwise (`src/main.rs`), so web releases reach it on the next launch. Game commands are allowed from the live origin through `capabilities/live.json` and the `game` permission (`permissions/game.toml`); a new Tauri command must be added there too.
 
 ## The economy lives on the server
 

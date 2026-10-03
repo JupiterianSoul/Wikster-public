@@ -227,10 +227,11 @@
 .lb-row {
   content-visibility: auto;
   contain-intrinsic-size: auto 52px;
-  display: grid; grid-template-columns: 2.8em 1fr auto; align-items: center; gap: 10px;
+  display: grid; grid-template-columns: 2.8em auto minmax(0, 1fr) auto; align-items: center; gap: 10px;
   padding: 10px 12px; border-radius: var(--radius); background: var(--surface);
   border: var(--border) var(--border-style) var(--line);
 }
+.lb-row.no-face { grid-template-columns: 2.8em minmax(0, 1fr) auto; }
 .lb-row.is-me { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
 .lb-rank { justify-self: start; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 800; color: var(--ink-dim); background: var(--surface-2); }
 .lb-row.is-me .lb-rank { color: var(--accent-ink); background: var(--accent); }

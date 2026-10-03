@@ -1,4 +1,4 @@
-import { getLanguage, t, tx } from '../i18n.js';
+import { getLanguage, lineTurn, t, tx } from '../i18n.js';
 import * as store from '../collection.js';
 import * as account from '../account.js';
 import { press } from '../ui/components.js';
@@ -470,7 +470,7 @@ export function paintList() {
   const rows = rowsNow();
   const more = moreNode();
   if (!rows.length) {
-    el.marketList.replaceChildren(h('p.empty-note', M.loading ? t('marketLoading') : t(`marketEmpty_${M.view}`)));
+    el.marketList.replaceChildren(h('p.empty-note', M.loading ? t('marketLoading') : t(`marketEmpty_${M.view}`, { pick: lineTurn() })));
   } else {
     el.marketList.replaceChildren(...rows.map(lotTile));
   }

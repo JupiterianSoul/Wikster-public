@@ -47,7 +47,10 @@ const PARENT = { open: 'packs', friend: 'friends', chat: 'friends', wikdle: 'gam
 
 const ALL = [...DESTINATIONS, ...HIDDEN];
 
+const friendOrigin = () => (state.friendFrom && state.friendFrom !== 'friend' && state.friendFrom !== 'chat' ? state.friendFrom : null);
+
 export function destinationOf(screen) {
+  if (screen === 'friend' && friendOrigin()) return destinationOf(friendOrigin()) ?? EXTRA.friend;
   if (EXTRA[screen]) return EXTRA[screen];
   return ALL.find((d) => d.subs?.some(([id]) => id === screen))?.id ?? null;
 }
@@ -169,6 +172,7 @@ function onScreen(name) {
 const currentSub = () => {
   if (pc.view) return views.get(pc.view)?.screens?.[0] ?? null;
   if (pc.screen === 'chat' && state.chatFrom === 'discussions') return 'discussions';
+  if (pc.screen === 'friend' && friendOrigin()) return friendOrigin();
   return PARENT[pc.screen] ?? pc.screen;
 };
 

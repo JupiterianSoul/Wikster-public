@@ -82,13 +82,11 @@ export function ageField() {
     <span class="age-row">
       <input name="age" type="range" min="1" max="99" step="1" value="50" />
       <output class="age-value">?</output>
-    </span>
-    <span class="field-hint"></span>`;
+    </span>`;
   wrap.querySelector('.field-label').textContent = t('gateAge');
-  wrap.querySelector('.field-hint').textContent = t('gateAgeHint');
   const input = wrap.querySelector('input');
   const out = wrap.querySelector('output');
-  input.setAttribute('aria-valuetext', t('gateAgeHint'));
+  input.setAttribute('aria-valuetext', t('gateAge'));
   input.addEventListener('input', () => {
     input.dataset.touched = '1';
     out.textContent = input.value;
