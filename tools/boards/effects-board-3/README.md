@@ -4,7 +4,6 @@ Eighty card treatments, ten for every rarity, each drawn as a real card at real
 size using the app's own effect layers (`.fx-a`, `.fx-b`, `.fx-c`, `.fx-v`,
 `.fx-p`, `.fx-code`, `.fx-ring`, `.fx-art`).
 
-Published at https://claude.ai/code/artifact/8b1d927b-2753-4e3a-b315-3ae2898cb5cb
 
 The first two boards were only ever published, never kept, and had to be dug
 back out of an old session before their designs could be shipped. This one lives

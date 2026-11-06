@@ -21,6 +21,25 @@ https://wikster.pages.dev
 - Unlock themes, level frames, card effects and badges
 - Play in English or French
 
+## Development
+
+The game is a Vite app with Supabase as the backend. It is also wrapped for Android (WebView) and for Steam (Tauri).
+
+```
+npm install
+cp .env.example .env     # your Supabase URL and publishable key
+npm run dev
+```
+
+Other scripts:
+
+- `npm run build` and `npm run preview`
+- `npm test` runs the checks (translations, a source sweep, unit tests, type check) and then the browser tests
+- `npm run check` runs only the static checks
+- `npm run shots` takes desktop screenshots
+
+The database schema is in `supabase/schema.sql` and the edge functions are in `supabase/functions/`. SQL tests are in `tests/sql/`.
+
 ## Credits
 
 Card text and images come from Wikipedia under [CC BY-SA](https://en.wikipedia.org/wiki/Wikipedia:Copyrights). Every card links back to its article. Wikster is not affiliated with Wikipedia or the Wikimedia Foundation.
